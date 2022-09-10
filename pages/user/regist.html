@@ -3,7 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <title>尚硅谷会员注册页面</title>
-<link type="text/css" rel="stylesheet" href="../../static/css/style.css" >
+	<link type="text/css" rel="stylesheet" href="../../static/css/style.css" >
+	<script type="text/javascript" src="../../static/script/jquery-1.7.2.js"></script>
+	<script type="text/javascript">
+
+		//页面加载完成之后
+		$(function(){
+
+			//”注册“（提交commit）绑定单击事件。（也可以对每个输入框用失去焦点事件  $("iniput[name='username']").bind('mouseover',function(){})）
+			$("#sub_btn").click(function (){
+				// 验证用户名：必须由字母，数字下划线组成，并且长度为 5 到 12 位
+				//1 获取用户名输入框里的内容
+				var usernameText = $("#username").val();
+				//2 创建正则表达式对象
+				var usernamePatt=/^\w{5,12}$/;
+				//3 使用test方法验证。
+				if (!usernamePatt.test(usernameText)){//取反 不合法的情况
+				//4 提示用户结果
+				//可以看到“注册尚硅谷会员”后面有个class为errorMsg的span，是用来错误信息的地方
+					$("span.errorMsg").text("用户名必须由字母，数字下划线组成，并且长度为5到12位");
+					//取消默认动作。防止跳转
+					return false;
+				}
+
+				// 验证密码：必须由字母，数字下划线组成，并且长度为 5 到 12 位
+				var passwordText = $("#password").val();
+				var passwordPatt=/^\w{5,12}$/;
+				if (!passwordPatt.test(passwordText)){
+					$("span.errorMsg").text("密码必须由字母，数字下划线组成，并且长度为5到12位");
+
+					return false;
+				}
+
+				// 验证确认密码：和密码相同
+				//1 获取密码内容
+				var repwdText = $("#repwd").val();
+				//2 和密码比较
+				if (repwdText != passwordText){
+					$("span.errorMsg").text("两次输入的密码不一致");
+
+					return false;
+				}
+				// 邮箱验证：xxxxx@xxx.com
+				//1 获取输入的邮箱地址
+				var emailText = $("#email").val();
+				//2 创建正则表达式对象
+				var emailPatt = /\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*/;
+				//3 使用test验证
+				if (!emailPatt.test(emailText)) {
+					$("span.errorMsg").text("邮箱地址不正确！");
+					return false;
+				}
+
+				// 验证码：现在只需要验证用户已输入。因为还没讲到服务器 验证码生成。
+				var codeText = $("#code").val();
+				codeText=$.trim(codeText);//去掉前后空格
+				if(codeText==null || codeText==""){
+					$("span.errorMsg").text("验证码不能为空")
+					return false;
+				}
+
+				//都合法 把错误信息清空
+				//因为如果是一个访问很慢的网址 注册页面就会暂时留下错误信息。(可以修改form的action来验证)
+				$("span.errorMsg").text("")
+			});
+
+		});
+	</script>
 <style type="text/css">
 	.login_form{
 		height:420px;
