@@ -42,7 +42,7 @@
 									<!--设置value属性 动态的表单项回显-->
 									<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
 <%--									value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"--%>
-											value="${requestScope.msg}"
+											value="${requestScope.username}"
 									/>
 									<br />
 									<br />

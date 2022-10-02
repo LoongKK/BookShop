@@ -367,7 +367,7 @@ BeanUtils 工具类的一个重要作用是，它可以一次性的把所有请�
 BeanUtils 工具类，经常用于把 Map 中的值注入到 JavaBean 中，或者是对象属性值的拷贝操作。  
 1、导入需要的 jar 包：  
 commons-beanutils-1.8.0.jar、 commons-logging-1.1.1.jar  
-（最新版commons-beanutils-1.9.4.jar、commons-logging-1.2.jar）  
+（最新版commons-beanutils-1.9.4.jar、commons-logging-1.2.jar，注意：新版的还依赖commons-collections-3.2.2.jar别用最新的4.4！！  ）  
 下载仓库：
 [官网](https://commons.apache.org/proper/) [阿里](https://mirrors.aliyun.com/apache/commons/)  
 （放入web/WEB-INF/lib下，添加到Book_lib库）  
@@ -433,7 +433,16 @@ public class WebUtils {
 <!--设置value属性 动态的表单项回显-->
 <input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
 <!--value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"-->
-value="${requestScope.msg}"
+value="${requestScope.username}"
 <!--el表达式如果是null自然就返回空字符串""-->
 />
 ```
+bug修改：  
+①login.jsp的el表达式写错了，导致表单项回显用户名那里写的是错误信息”用户名或密码错误“而不是用户名  
+②注册提交后报错(少了一个依赖包)   
+debug发现`java.lang.ClassNotFoundException: org.apache.commons.collections.FastHashMap`  
+[官网查看依赖](https://commons.apache.org/proper/commons-beanutils/dependencies.html)
+发现新版commons-beanutils.jar包 不仅依赖commons-logging.jar还依赖	commons-collections.jar  
+添加commons-collections-3.2.2.jar后可以了（不要用新版本4.4的）
+参考https://blog.csdn.net/weixin_45454773/article/details/122262709
+https://www.jianshu.com/p/8d870e807aaf
