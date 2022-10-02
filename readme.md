@@ -110,8 +110,8 @@ if(验证码正确){
 ```
 并配置web.xml。  
 2.修改页面regist.html和regist_success.html  
-[regist.html](web/pages/user/regist.html)  
-[regist_success.html](web/pages/user/regist_success.html)  
+[regist.html](web/pages/user/regist.jsp)  
+[regist_success.html](web/pages/user/regist_success.jsp)  
 主要改动：  
 （1）两个html中都增加`<base>` 标签（永远固定相对路径跳转的结果），并修改受其影响的相对路径。  
 实际项目中，base的harf属性值一般写到工程路径。  
@@ -138,11 +138,130 @@ if(根据Login（）方法返回结果判断,登录成功?){
 ```
 
 并配置web.xml。
-2.修改login.html页面和login_success.html页面
-(参考前面的，不多说)
-（1）添加 base 标签，并修改相对路径
-（2）修改login.html中表单提交的地址为Servlet程序,请求方式为post
+2.修改login.html页面和login_success.html页面(参考前面的，不多说)  
+（1）添加 base 标签，并修改相对路径  
+（2）修改login.html中表单提交的地址为Servlet程序,请求方式为post  
 
 
+# 书城项目第三阶段：代码优化
+
+## 页面jsp动态化  
+1、在 html 页面顶行添加 page 指令。  
+ 即`<%@ page contentType="text/html;charset=UTF-8" language="java" %>`  
+```shell
+#我用的linux子系统（ubuntu） 在pages文件夹下
+$ sed -i '1i <%@ page contentType="text/html;charset=UTF-8" language="java" %>' */*.html
+```
+2、修改文件后缀名为：.jsp(重命名快捷键shift+F6)  
+```shell
+#我用的linux子系统（ubuntu） 在pages文件夹下
+$ rename 's/\.html/\.jsp/' */*.html
+```
+3、使用 IDEA 搜索替换.html 为.jsp(快捷键：Ctrl+Shift+R)
+```shell
+#我用的linux子系统（ubuntu） 在pages文件夹下
+$ sed -n 's/\.html/\.jsp/p' */*.jsp #预览
+$ sed -i 's/\.html/\.jsp/g' */*.jsp #直接对文件操作
+```
+(除了pages下的页面，别忘了还有index.html需要做这些修改。)
+(Servlet程序里的请求转发也要改成".jsp"。)
+## 抽取页面中相同的内容  
+将不同页面的相同内容抽取为一个公共页面，通过包含或页面转发使用。  
+web/pages下新建目录common存放公共页面
+
+（1）head 中 css、jquery、base 标签  
+head.jsp
+```html
+<body>
+<%
+//    "http://localhost:8080/BookShop/"
+    String basePath = request.getScheme()
+            + "://"
+            + request.getServerName()
+            + ":"
+            + request.getServerPort()
+            + request.getContextPath()
+            + "/";
+%>
+
+<%--动态的获取base的href属性值<%=basePath%>--%>
+<base href="<%=basePath%>">
+<link type="text/css" rel="stylesheet" href="static/css/style.css" >
+<script type="text/javascript" src="static/script/jquery-1.7.2.js"></script>
+</body>
+```
+
+静态包含:`<%@ include file="/pages/common/head.jsp" %>`  
+然后每个页面不对的相对路径也要改。  
+（2）每个页面的页脚
+footer.jsp
+```html
+<body>
+<div id="bottom">
+		<span>
+			尚硅谷书城.Copyright &copy;2015
+		</span>
+</div>
+</body>
+```
+
+静态包含`<%@ include file="/pages/common/footer.jsp" %>`  
+（3）登录成功后的菜单   
+login_success_menu.jsp
+```html
+<body>
+<div>
+    <span>欢迎<span class="um_span">韩总</span>光临尚硅谷书城</span>
+    <a href="pages/order/order.jsp">我的订单</a>
+    <a href="index.jsp">注销</a>&nbsp;&nbsp;
+    <a href="index.jsp">返回</a>
+</div>
+</body>
+```
+然后所有有相同内容的页面，采用 静态包含 此页面，替换相同内容  
+```<%@ include file="/pages/common/login_success_menu.jsp" %>```   
+（4）manager 模块的菜单  
+manager_menu.jsp
+```html
+<body>
+<div>
+    <a href="pages/manager/book_manager.jsp">图书管理</a>
+    <a href="pages/manager/order_manager.jsp">订单管理</a>
+    <a href="index.jsp">返回商城</a>
+</div>
+</body>
+```
+静态包含`<%@ include file="/pages/common/manager_menu.jsp" %>`
+## 登录，注册错误提示，及表单回显  
+当用户名或密码错误时，跳回原来的页面 并 回显错误信息 和 表单项信息。  
+比如登录失败，返回登录页面并提示“用户名或密码错误”，然后自动填充刚才输入的用户名到用户名输入框。   
+以登录回显为示例：
+Servlet 程序端需要添加回显信息到 Request 域中
+修改LoginServlet.java
+```java
+//System.out.println("登录失败");
+            //把错误信息、回显的表单项信息，保存到Request域中
+            req.setAttribute("msg","用户名或密码错误");
+            req.setAttribute("username",username);
+            //跳转登录页面
+            req.getRequestDispatcher("/pages/user/login.jsp").forward(req,resp);
+```
+jsp 页面，需要输出回显信息。修改login.jsp
+```html
+<span class="errorMsg">
+<!--动态显示回显的错误信息-->
+<%=request.getAttribute("msg")==null?"请输入用户名和密码":request.getAttribute("msg")%>
+</span>
+						
+。。。。。。
+<label>用户名称：</label>
+<!--设置value属性 动态的表单项回显-->
+<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
+value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"
+									/>
+```
+
+注册回显:  
+回显"验证码"和”用户名已存在“错误信息，并回显表单项username和email即可。见RegistServlet.java和regist.jsp
 
 

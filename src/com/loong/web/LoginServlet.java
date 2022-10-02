@@ -28,10 +28,14 @@ public class LoginServlet extends HttpServlet {
         //根据登录结果进行跳转
         if (loginUser != null){
             System.out.println("登录成功");
-            req.getRequestDispatcher("/pages/user/login_success.html").forward(req,resp);
+            req.getRequestDispatcher("/pages/user/login_success.jsp").forward(req,resp);
         }else{
-            System.out.println("登录失败");
-            req.getRequestDispatcher("/pages/user/login.html").forward(req,resp);
+            //System.out.println("登录失败");
+            //把错误信息、回显的表单项信息，保存到Request域中
+            req.setAttribute("msg","用户名或密码错误");
+            req.setAttribute("username",username);
+            //跳转登录页面
+            req.getRequestDispatcher("/pages/user/login.jsp").forward(req,resp);
         }
     }
 

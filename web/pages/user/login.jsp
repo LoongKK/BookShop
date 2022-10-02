@@ -1,10 +1,11 @@
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 <title>尚硅谷会员登录页面</title>
-	<base href="http://localhost:8080/BookShop/">
-<link type="text/css" rel="stylesheet" href="static/css/style.css" >
+	<!--静态包含-->
+	<%@ include file="/pages/common/head.jsp" %>
 </head>
 <body>
 		<div id="login_header">
@@ -22,16 +23,22 @@
 						<div class="login_box">
 							<div class="tit">
 								<h1>尚硅谷会员</h1>
-								<a href="pages/user/regist.html">立即注册</a>
+								<a href="pages/user/regist.jsp">立即注册</a>
 							</div>
 							<div class="msg_cont">
 								<b></b>
-								<span class="errorMsg">请输入用户名和密码</span>
+								<span class="errorMsg">
+									<!--动态显示回显的错误信息-->
+								<%=request.getAttribute("msg")==null?"请输入用户名和密码":request.getAttribute("msg")%>
+								</span>
 							</div>
 							<div class="form">
 								<form action="loginServlet" method="post">
 									<label>用户名称：</label>
-									<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username" />
+									<!--设置value属性 动态的表单项回显-->
+									<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
+									value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"
+									/>
 									<br />
 									<br />
 									<label>用户密码：</label>
@@ -46,10 +53,6 @@
 					</div>
 				</div>
 			</div>
-		<div id="bottom">
-			<span>
-				尚硅谷书城.Copyright &copy;2015
-			</span>
-		</div>
+		<%@ include file="/pages/common/footer.jsp" %>
 </body>
 </html>
