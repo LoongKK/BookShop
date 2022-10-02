@@ -97,15 +97,20 @@
 								<h1>注册尚硅谷会员</h1>
 								<span class="errorMsg">
 									<!--回显错误信息-->
-									<%=request.getAttribute("msg")==null?"":request.getAttribute("msg")%>
+<%--									<%=request.getAttribute("msg")==null?"":request.getAttribute("msg")%>--%>
+									${requestScope.msg}
 								</span>
 							</div>
 							<div class="form">
-								<form action="registServlet" method="post">
+								<!--修改表单请求地址-->
+								<form action="userServlet" method="post">
+									<!--添加隐藏域 action，值为regist-->
+									<input type="hidden" name="action" value="regist">
 									<label>用户名称：</label>
 									<!--设置value属性，表单项回显信息-->
 									<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username" id="username"
-										   value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"
+<%--										   value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"--%>
+												value="${requestScope.username}"
 									/>
 									<br />
 									<br />
@@ -120,7 +125,8 @@
 									<label>电子邮件：</label>
 									<!--设置value属性，表单项回显信息-->
 									<input class="itxt" type="text" placeholder="请输入邮箱地址" autocomplete="off" tabindex="1" name="email" id="email"
-										   value="<%=request.getAttribute("email")==null?"":request.getAttribute("email")%>"
+<%--										   value="<%=request.getAttribute("email")==null?"":request.getAttribute("email")%>"--%>
+												value="${requestScope.email}"
 									/>
 									<br />
 									<br />

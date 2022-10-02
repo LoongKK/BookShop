@@ -29,15 +29,20 @@
 								<b></b>
 								<span class="errorMsg">
 									<!--动态显示回显的错误信息-->
-								<%=request.getAttribute("msg")==null?"请输入用户名和密码":request.getAttribute("msg")%>
+<%--								<%=request.getAttribute("msg")==null?"请输入用户名和密码":request.getAttribute("msg")%>--%>
+									${empty requestScope.msg?"请输入用户名和密码":requestScope.msg}
 								</span>
 							</div>
 							<div class="form">
-								<form action="loginServlet" method="post">
+								<!--修改表单请求地址-->
+								<form action="userServlet" method="post">
+									<!--添加隐藏域 action，值为login-->
+									<input type="hidden" name="action" value="login">
 									<label>用户名称：</label>
 									<!--设置value属性 动态的表单项回显-->
 									<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
-									value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"
+<%--									value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"--%>
+											value="${requestScope.msg}"
 									/>
 									<br />
 									<br />

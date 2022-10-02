@@ -27,7 +27,7 @@
 3）服务器应该保存用户  
 4）当用户已经存在----提示用户注册 失败，用户名已存在  
 5）当用户不存在-----注册成功  
-####需求二：用户登陆
+#### 需求二：用户登陆  
 1）访问登陆页面  
 2）填写用户名密码后提交  
 3）服务器判断用户是否存在  
@@ -258,10 +258,182 @@ jsp 页面，需要输出回显信息。修改login.jsp
 <!--设置value属性 动态的表单项回显-->
 <input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
 value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"
-									/>
+/>
 ```
 
 注册回显:  
 回显"验证码"和”用户名已存在“错误信息，并回显表单项username和email即可。见RegistServlet.java和regist.jsp
 
 
+# 书城项目第四阶段：代码优化
+## 合并LoginServlet和RegistServlet程序为UserServlet程序
+在实际的项目开发中，一个模块，一般只使用一个 Servlet 程序。  
+LoginServlet和RegistServlet程序都属于用户模块。合并成一个UserServlet程序。
+(1)login.jsp和regist.jsp页面都添加隐藏域action，和修改表单请求地址为userServlet
+```html
+<!--修改表单请求地址-->
+<form action="userServlet" method="post">
+    <!--添加隐藏域 action，值为login-->
+    <input type="hidden" name="action" value="login">
+```
+```html
+<!--修改表单请求地址-->
+<form action="userServlet" method="post">
+    <!--添加隐藏域 action，值为regist-->
+    <input type="hidden" name="action" value="regist">
+```
+(2)UserServlet.java  
+基本逻辑：
+```java
+public class UserServlet extends HttpServlet {
+
+    protected void login(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //原来LoginServlet中的代码。。。
+    }
+
+    protected void regist(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //原来RegistServlet中的代码。。。
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        String action = request.getParameter("action");
+        if("login".equals(action)){
+            //登录
+            login(request, response);
+        }else if ("regist".equals(action)){
+            //注册
+            regist(request,response);
+        }
+    }
+}
+```
+## 使用反射优化大量 else if 代码
+除了登录和注册，还有很多和用户模块有关的功能，比如：添加用户、修改用户信息、修改邮箱、修改密码、绑定手机号、绑定邮箱、注销用户等。  
+若都在UserServlet的doPost方法中采用else if判断action,会有大量代码。—— 使用反射优化  
+```java
+   String action = request.getParameter("action");
+
+   //使用反射优化大量 else if 代码
+   try {
+       //获取 action 业务鉴别字符串，获取相应的业务 方法反射对象
+        //比如根据action=“login"找方法名login的方法 
+       Method method = this.getClass().getDeclaredMethod(action, HttpServletRequest.class, HttpServletResponse.class);
+     
+       // 调用目标业务 方法
+       method.invoke(this, request, response);
+   } catch (Exception e) {
+       e.printStackTrace();
+   }
+```
+## 抽取BaseServlet
+一些代码（比如获取action参数值、通过反射获取action对应的业务方法、通过反射调用业务方法）等不仅是用户模块(UserServlet程序)需要的，其它模块比如图书模块BookServlet也需要这些。  
+抽取一个BaseServlet类，UserServlet和BookServlet等只要继承BaseServlet就可以。  
+BaseServlet.java(com.loong.web包下)
+①是抽象类 ②继承HttpServlet ③相同的代码写在里面 ④不需要配置在web.xml中
+```java
+public abstract class BaseServlet extends HttpServlet{
+    //这里是以前UserServlet中doPost方法代码，复制过来。。。
+}
+```
+
+⑤UserServlet或其它功能模块需要继承BaseServlet
+```java
+public class UserServlet extends BaseServlet {
+    //doPost抽取到BaseServlet中了，只需继承BaseServlet即可(也就继承了其中的doPost方法)
+
+    protected void login(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //。。。
+    }
+
+    protected void regist(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //...
+        }
+    }
+}
+```
+## 数据的封装和抽取 BeanUtils 的使用
+以前获取参数、封装成javabean，如果参数过多会很麻烦。
+```java
+        //获取参数
+        String username = req.getParameter("username");
+        String password = req.getParameter("password");
+        String email = req.getParameter("email");
+                ...
+                //封装成bean
+                userService.registUser(new User(null,username,password,email));
+```
+BeanUtils 工具类的一个重要作用是，它可以一次性的把所有请求的参数注入到 JavaBean 中。  
+BeanUtils 工具类，经常用于把 Map 中的值注入到 JavaBean 中，或者是对象属性值的拷贝操作。  
+1、导入需要的 jar 包：  
+commons-beanutils-1.8.0.jar、 commons-logging-1.1.1.jar  
+（最新版commons-beanutils-1.9.4.jar、commons-logging-1.2.jar）  
+下载仓库：
+[官网](https://commons.apache.org/proper/) [阿里](https://mirrors.aliyun.com/apache/commons/)  
+（放入web/WEB-INF/lib下，添加到Book_lib库）  
+2、编写 WebUtils 工具类使用：  
+WebUtils.java（）：  
+```java
+package com.loong.utils;
+
+import org.apache.commons.beanutils.BeanUtils;
+import java.util.Map;
+
+public class WebUtils {
+    /**
+     * 把 Map 中的值注入到对应的 JavaBean 属性中。并返回新的bean
+     * @param properties
+     * @param bean
+     */
+    public static <T> T copyParamToBean(Map properties , T bean ){
+        try {
+            //把所有请求的参数都注入到 bean 对象中
+//static void populate(Object bean, Map<String,? extends Object> properties)
+            //根据指定的name-value对填充指定bean的属性。
+            // 底层依赖于javabean中的setter
+            BeanUtils.populate(bean, properties);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return bean;
+    }
+}
+```
+以注册方法为例演示如何使用：
+```java
+ protected void regist(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //使用BeanUtils优化：
+        //获取获取含所有参数(name-value对)的Map,并封装到javabean的属性，返回封装了数据的user
+        User user = WebUtils.copyParamToBean(req.getParameterMap(), new User());
+        //下面用参数的时候，直接通过bean的getter调用。如user.getUsername()相当于req.getParameter("username")
+        //甚至”保存到数据库“时直接使用user对象
+        
+        if("abcde".equals(req.getParameter("code"))){
+        UserService userService=new UserServiceImpl();
+        if(!userService.existsUsername(user.getUsername())){//通过getter使用参数
+        userService.registUser(user);//直接存user
+        req.getRequestDispatcher("/pages/user/regist_success.jsp").forward(req,resp);
+        }else
+        。。。
+        }
+```
+## 使用EL表达式修改表单回显
+在第三阶段 使用jsp做回显，可使用EL表达式进行优化。  
+修改login.jsp和regist.jsp  
+如：
+```html
+<span class="errorMsg">
+<!--动态显示回显的错误信息-->
+<!--<%=request.getAttribute("msg")==null?"请输入用户名和密码":request.getAttribute("msg")%>-->
+    	${empty requestScope.msg?"请输入用户名和密码":requestScope.msg}
+</span>
+						
+。。。。。。
+<label>用户名称：</label>
+<!--设置value属性 动态的表单项回显-->
+<input class="itxt" type="text" placeholder="请输入用户名" autocomplete="off" tabindex="1" name="username"
+<!--value="<%=request.getAttribute("username")==null?"":request.getAttribute("username")%>"-->
+value="${requestScope.msg}"
+<!--el表达式如果是null自然就返回空字符串""-->
+/>
+```
