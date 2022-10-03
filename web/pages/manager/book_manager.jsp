@@ -1,3 +1,4 @@
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <!DOCTYPE html>
 <html>
@@ -6,6 +7,24 @@
 <title>图书管理</title>
 	<!--静态包含-->
 	<%@ include file="/pages/common/head.jsp" %>
+
+	<script type="text/javascript">
+		$(function () {
+			// 给删除的 a 标签绑定单击事件，用于删除的确认提示操作
+			$("a.deleteClass").click(function () {
+				// 在事件的 function 函数中，有一个 this 对象。这个 this 对象，是当前正在响应事件的 dom 对象。
+				/**
+				 * confirm 是确认提示框函数
+				 * 参数是它的提示内容
+				 * 它有两个按钮，一个确认，一个是取消。
+				 * 返回 true 表示点击了，确认，返回 false 表示点击取消。
+				 */
+				return confirm("你确定要删除【" + $(this).parent().parent().find("td:first").text() + "】?");
+				// return false// 阻止元素的默认行为===不提交请求
+				// 。return ture不阻止
+			});
+		});
+	</script>
 </head>
 <body>
 	
@@ -25,46 +44,19 @@
 				<td>销量</td>
 				<td>库存</td>
 				<td colspan="2">操作</td>
-			</tr>		
+			</tr>
+			<!--EL表达式从request域中获取全部图书信息,使用JSTL标签库遍历输出-->
+			<c:forEach items="${requestScope.books}" var="book">
 			<tr>
-				<td>时间简史</td>
-				<td>20.00</td>
-				<td>霍金</td>
-				<td>200</td>
-				<td>400</td>
-				<td><a href="pages/manager/book_edit.jsp">修改</a></td>
-				<td><a href="#">删除</a></td>
-			</tr>	
-			
-			<tr>
-				<td>时间简史</td>
-				<td>20.00</td>
-				<td>霍金</td>
-				<td>200</td>
-				<td>400</td>
-				<td><a href="pages/manager/book_edit.jsp">修改</a></td>
-				<td><a href="#">删除</a></td>
-			</tr>	
-			
-			<tr>
-				<td>时间简史</td>
-				<td>20.00</td>
-				<td>霍金</td>
-				<td>200</td>
-				<td>400</td>
-				<td><a href="pages/manager/book_edit.jsp">修改</a></td>
-				<td><a href="#">删除</a></td>
-			</tr>	
-			
-			<tr>
-				<td>时间简史</td>
-				<td>20.00</td>
-				<td>霍金</td>
-				<td>200</td>
-				<td>400</td>
-				<td><a href="pages/manager/book_edit.jsp">修改</a></td>
-				<td><a href="#">删除</a></td>
-			</tr>	
+				<td>${book.name}</td>
+				<td>${book.price}</td>
+				<td>${book.author}</td>
+				<td>${book.sales}</td>
+				<td>${book.stock}</td>
+				<td><a href="manager/bookServlet?action=getBook&id=${book.id}">修改</a></td>
+				<td><a class="deleteClass" href="manager/bookServlet?action=delete&id=${book.id}">删除</a></td>
+			</tr>
+			</c:forEach>
 			
 			<tr>
 				<td></td>
