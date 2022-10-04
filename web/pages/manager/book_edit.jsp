@@ -31,6 +31,7 @@
 		
 		<div id="main">
 			<form action="manager/bookServlet" method="get"><!--没什么敏感信息，用get就好-->
+				<input type="hidden" name="pageNo" value="${param.pageNo}">
 <%--				<input type="hidden" name="action" value="add"><!--添加隐藏域action，要调用哪个方法-->--%>
 				<input type="hidden" name="action" value="${empty param.id?"add":"update"}">
 				<input type="hidden" name="id" value="${requestScope.book.id}">

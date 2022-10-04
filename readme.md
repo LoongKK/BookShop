@@ -1,4 +1,5 @@
 # BookShop
+
 尚硅谷_书城项目
 ## 第一次提交
 
@@ -751,7 +752,7 @@ public static int parseInt(String strInt,int defaultValue){
 <td><a href="manager/bookServlet?action=getBook&id=${book.id}&method=update">修改</a></td>
 <td><a href="pages/manager/book_edit.jsp？method=add">添加图书</a></td>
 ```
- 
+
 
 * 解决方案二：可以通过判断当前请求参数中是否包含有id参数。  
   如果有说明是修改操作 如果没有说明是添加操作。
@@ -779,3 +780,390 @@ public static int parseInt(String strInt,int defaultValue){
         response.sendRedirect(request.getContextPath()+ "/manager/bookServlet?action=list");
     }
 ```
+
+# 第五阶段：图书模块之分页
+
+## "图书管理"分页功能的实现
+
+显示效果演示：(markdown中使用html语法)
+<table>
+    <tr>
+	<div id="page_nav">
+		<a href="#">首页</a>
+		<a href="#">上一页</a>
+		<a href="#">3</a>
+		【4】
+		<a href="#">5</a>
+		<a href="#">下一页</a>
+		<a href="#">末页</a>
+		共10页，30条记录 到第<input value="4" name="pn" id="pn_input"/>页
+		<input type="button" value="确定">
+	</div>
+    </tr>
+</table>
+![page.png](readme.assets/page.png)
+![分页.bmp](readme.assets/分页.bmp)
+
+### 分页的对象模型Page类
+分析：
+```
+pageNo当前页码
+pageTotal总页码
+pageTotalCount总记录数
+pageSize每页显示数量
+items当前页数据(集合)
+```
+* pageNo当前页码。当前页码是由客户端进行传递
+* pageSize每页显示数量由两种因素决定：客户端进行传递、由页面布局决定 
+* pageTotalCount总记录数可以由sg|语句求得。`select count(*) from 表名;`
+* pageTota|总页码可以由`总记录数/每页数量`即`pageTotalCount/pageSize`得到。  
+
+    (注：总记录数%每页数量>0，则总页码+1)
+* items是当前页数据，也是可以由sql语句求得。`select * from 表名 limit begin,pageSize;`
+* begin可以由公式求得：`(pageNo-1)x pageSize`;
+
+分析知：浏览器需向服务器传递两个参数：**pageNo当前页码 和 pageSize每页显示数量**。
+
+Page.java(com.loong.pojo)
+```java
+/**
+ * Page是分页的模型对象
+ * @param <T>是具体的JavaBean类(本项目中为Book)
+ */
+public class Page<T> {
+    public static final Integer PAGE_SIZE = 4;
+    private Integer pageNo;//当前页码
+    private Integer pageTotal;//总页码
+    private Integer pageSize = PAGE_SIZE;//当前页显示数量 默认4
+    private Integer pageTotalCount;//总记录数
+    private List<T> items;//当前数据
+    //空参 有参构造器  getter setter tostring。。。
+}
+```
+### 功能初步实现
+
+manager_menu.jsp 中【图书管理】请求地址的修改  
+（”list“该成”page“，page方法里会保存page对象后再请求转发到）
+```html
+ <a href="manager/bookServlet?action=page">图书管理</a>
+```
+BookDao接口中增加方法
+```java
+    /**
+     * 查询总记录数
+     * @param conn
+     * @return 总记录数PageTotalCount
+     */
+    public Integer queryForPageTotalCount(Connection conn);
+
+    /**
+     * 查询当前页的Book数据
+     * @param conn
+     * @param begin
+     * @param pageSize
+     * @return 当前页的size个Book对象元素的List集合
+     */
+    public List<Book> queryForPageItems(Connection conn, int begin, int pageSize);
+```
+BookDaoImpl中实现方法
+```java
+    @Override
+public Integer queryForPageTotalCount(Connection conn) {
+        String sql="SELECT COUNT(*) FROM t_book";
+        //Integer pageTotalCount = (Integer) getValue(conn, sql, null);
+        // 直接强转为Integer报错java.lang.Long cannot be cast to java.lang.Integer
+        //返回的count(*)是Object型，运行时类型是Long型的
+        //java.lang.Number是Integer,Long的父类。而Long和Integer不具有继承关系
+        //解决：
+        Number count = (Number) getValue(conn, sql, null);
+        //Number对象调用inValue()方法转换为int类型
+        return count.intValue();
+        }
+
+    @Override
+    public List<Book> queryForPageItems(Connection conn, int begin, int pageSize) {
+        String sql = "SELECT `id`,`name`,`author`,`price`,`sales`,`stock`,`img_path` imgPath " +
+        "FROM t_book LIMIT ?,?";
+        return getBeanList(conn,sql,begin,pageSize);
+    }
+```
+
+BookService接口中方法
+```java
+   /**
+     * 返回一个包含数据后的Page对象
+     * @param pageNo
+     * @param pageSize
+     * @return 包含数据的Page对象
+     */
+    Page<Book> page(int pageNo, int pageSize);
+```
+BookServiceImpl中实现方法
+```java
+    @Override
+    public Page<Book> page(int pageNo, int pageSize) {
+
+        Connection conn = null;
+        try {
+            conn = JDBCUtils.getConnection();
+
+            Page<Book> page = new Page<>();
+            //设置当前页码
+            page.setPageNo(pageNo);
+            //设置每页显示的数量
+            page.setPageSize(pageSize);
+
+            //求总记录数
+            int pageTotalCount = bookDao.queryForPageTotalCount(conn);
+            //设置记录数
+            page.setPageTotalCount(pageTotalCount);
+
+            //求总页码。(注意 数量不足一页的也要按一页显示)
+            int pageTotal = pageTotalCount / pageSize;
+            if(pageTotalCount%pageSize>0){ //总记录数%每页数量>0，则总页码+1
+                pageTotal+=1;
+            }
+            //设置总页码
+            page.setPageTotal(pageTotal);
+
+            //当前页数据的开始索引
+            int begin=(pageNo-1)*pageSize;
+            //当前页数据
+            page.setItems(bookDao.queryForPageItems(conn,begin,pageSize));
+
+            return page;
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            JDBCUtils.closeResource(conn, null, null);
+        }
+        return null;
+    }
+```
+BookServlet中page方法：
+```java
+    protected void page(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //1、获取请求的参数pageNo和pageSize
+        int pageNo = WebUtils.parseInt(req.getParameter("pageNo"), 1);
+        int pageSize = WebUtils.parseInt(req.getParameter("pageSize"), Page.PAGE_SIZE);
+        //2、调用bookService.page(pageNo,pageSize)获取Page对象
+        Page<Book> page=bookService.page(pageNo,pageSize);
+        //3、Page对象保存到Request域中
+        req.setAttribute("page",page);
+        //4、请求求转发到/pages/manager/book_manager.jsp页面
+        req.getRequestDispatcher("/pages/manager/book_manager.jsp").forward(req,resp);
+    }
+```
+
+book_manager.jsp修改：
+```html
+<%--迭代的集合改为${requestScope.page.items}--%>
+<c:forEach items="${requestScope.page.items}" var="book">
+。。。
+</table>
+    <%--分页功能--%>
+    <div id="page_nav">
+        <%--大于首页，才显示--%>
+        <c:if test="${requestScope.page.pageNo > 1}">
+            <a href="manager/bookServlet?action=page&pageNo=1">首页</a>
+            <a href="manager/bookServlet?action=page&pageNo=${requestScope.page.pageNo-1}">上一页</a>
+        </c:if>
+        <a href="#">3</a>
+        【${ requestScope.page.pageNo }】
+        <a href="#">5</a>
+        <%-- 如果已经 是最后一页，则不显示下一页，末页 --%>
+        <c:if test="${requestScope.page.pageNo < requestScope.page.pageTotal}">
+            <a href="manager/bookServlet?action=page&pageNo=${requestScope.page.pageNo+1}">下一页</a>
+            <a href="manager/bookServlet?action=page&pageNo=${requestScope.page.pageTotal}">末页</a>
+        </c:if>
+        共${ requestScope.page.pageTotal }页，${ requestScope.page.pageTotalCount }条记录
+        到第<input value="4" name="pn" id="pn_input"/>页
+        <input type="button" value="确定">
+    </div>
+。。。
+```
+> 测试时报异常`NumberFormatException: null`  
+> 自定义工具类WebUtils的parseInt方法中的`e.printStackTrace();`//还是把这里注释掉了，分页那里刚点进"图书管理"pageNo是null，打印异常挺别扭的，正常应该用日志工具输出到日志里
+### 高级功能完善
+#### 跳转到指定页数功能  
+book_manager.jsp
+```html
+	<%--这里默认显示当前页面的页数比较好--%>
+	到第<input value="${param.pageNo}" name="pn" id="pn_input"/>页
+    <input id="searchPageBtn" type="button" value="确定">
+
+		<script type="text/javascript">
+			$(function(){
+				//跳到指定的页码
+				$("#searchPageBtn").click(function(){
+					let pageNo = $("#pn_input").val();
+                //这里应该有前端的数据边境有效检查，将pageNo和pageTotal作比较给用户提示。这里略，只做后端的检查
+                //${requestScope.page.pageTotal}
+				/* javaScript 语言中提供了一个 location 地址栏对象
+					它有一个属性叫 href.它可以获取浏览器地址栏中的地址
+					href 属性可读，可写
+				 */
+				<%--这里使用标签${pageScope.basePath}可以灵活的获取base路径。
+				要在head.jsp中request.setAttribute("basePath",basePath);--%>
+				location.href="${pageScope.basePath}manager/bookServlet?action=page&pageNo=" + pageNo;
+                });
+			});
+		</script>
+</div>
+```
+> head.jsp中需 `request.setAttribute("basePath",basePath);`
+#### 数据边界的有效检查
+一个问题：用户输入了超过范围的数字，想跳转怎么办？——数据边界的有效检查  
+Page类setPageNo方法修改：
+```java
+    public void setPageNo(Integer pageNo) {
+        /* 数据边界的有效检查 */
+        if (pageNo < 1) {
+        pageNo = 1;
+        }
+        if (pageNo > pageTotal) {
+        pageNo = pageTotal;
+        }
+        this.pageNo = pageNo;
+    }
+```
+并修改
+BookServiceImpl中的page方法:  
+①设置当前页码放在设置总页码后面,因为setPageNo需要和PageTotal比较。  
+②begin的计算方法中，使用getPageNo方法获取实际存入Page的当前页码而不是直接使用传入PageNo
+```java
+// 设置总页码
+page.setPageTotal(pageTot
+//设置当前页码
+page.setPageNo(pageNo);
+//当前页数据的开始索引
+int begin = (page.getPageNo() - 1) * pageSize;
+```
+
+#### 显示页码，并且页码可以点击跳转。
+
+需求：显示五个连续的页码，而且当前页码在中间。除了当前页码之外，每个页码都可以点击跳到指定页。
+
+情况 1：如果总页码pageTotal<=5 的情况，页码的范围是：1-总页码
+```
+1 页：1
+2 页：1，2
+3 页：1，2，3
+4 页：1，2，3，4
+5 页：1，2，3，4，5
+```
+情况 2：总页码pageTotal>5 的情况。假设一共 10 页
+```
+小情况 1：当前页码为前面 3 个：1，2，3 的情况，页码范围是：1-5  
+【1】2，3，4，5
+1【2】3，4，5
+1，2【3】4，5
+小情况 2：当前页码为最后 3 个，8，9，10，页码范围是：pageTotal-4 至 pageTotal   
+6，7【8】9，10
+6，7，8【9】10
+6，7，8，9【10】
+小情况 3：4，5，6，7，五个页码范围是：pageNo-2 至 pageNo+2
+2，3【4】5，6
+3，4【5】6，7
+4，5【6】7，8
+5，6【7】8，9
+```
+
+代码实现：  
+将book_manager.jsp中
+```html
+	<a href="#">3</a>
+    【${ requestScope.page.pageNo }】
+    <a href="#">5</a>
+```
+改成
+```html
+    <%--页码输出的开始--%>
+    <c:choose>
+        <%--情况1：如果总页码小于等于5的情况，页码的范围是：1-总页码--%>
+        <c:when test="${ requestScope.page.pageTotal <= 5 }">
+            <c:set var="begin" value="1"/>
+            <c:set var="end" value="${requestScope.page.pageTotal}"/>
+        </c:when>
+        <%--情况2：总页码大于5的情况--%>
+        <c:when test="${requestScope.page.pageTotal > 5}">
+            <c:choose>
+                <%--小情况1：当前页码为前面3个：1，2，3的情况，页码范围是：1-5.--%>
+                <c:when test="${requestScope.page.pageNo <= 3}">
+                    <c:set var="begin" value="1"/>
+                    <c:set var="end" value="5"/>
+                </c:when>
+                <%--小情况2：当前页码为最后3个，8，9，10，页码范围是：总页码减4 - 总页码--%>
+                <c:when test="${requestScope.page.pageNo > requestScope.page.pageTotal-3}">
+                    <c:set var="begin" value="${requestScope.page.pageTotal-4}"/>
+                    <c:set var="end" value="${requestScope.page.pageTotal}"/>
+                </c:when>
+                <%--小情况3：4，5，6，7，页码范围是：当前页码减2 - 当前页码加2--%>
+                <c:otherwise>
+                    <c:set var="begin" value="${requestScope.page.pageNo-2}"/>
+                    <c:set var="end" value="${requestScope.page.pageNo+2}"/>
+                </c:otherwise>
+            </c:choose>
+        </c:when>
+    </c:choose>
+
+    <c:forEach begin="${begin}" end="${end}" var="i">
+        <c:if test="${i == requestScope.page.pageNo}">
+            【${i}】
+        </c:if>
+        <c:if test="${i != requestScope.page.pageNo}">
+            <a href="manager/bookServlet?action=page&pageNo=${i}">${i}</a>
+        </c:if>
+    </c:forEach>
+    <%--页码输出的结束--%>
+```
+
+### 分页后，增删改图书时的页面回显
+
+#### 添加图书后
+
+book_manager.jsp在"添加图书"的跳转地址加上参数`?pageNo=${requestScope.page.pageTotal`。将总页数作为当前页码数传给book_edit
+```html
+<td><a href="pages/manager/book_edit.jsp?pageNo=${requestScope.page.pageTotal">添加图书</a></td>
+```
+book_edit.jsp页面form表单中使用隐藏域记录下pageNo参数(添加图书时加过了)。提交表单时，也就再次传给了BookServlet程序的add方法
+```html
+<input type="hidden" name="pageNo" value="${param.pageNo}">
+```
+BookServlet中add方法，重定向时，改成`acthion=page`并获取当前页码追加上pageNo进行跳转。  
+（注意：此时的传来pageNo参数实际上是manager.jsp传的总页数pageTotal，**再加上1**，得到重定向地址中的pageNo。重定向到page方法时就会setPageNo中做边界处理。——确保了一定是尾页，以查看新添加的图书）
+```java
+     response.sendRedirect(request.getContextPath() + "/manager/bookServlet" + "?action=page" +
+        "&pageNo=" + (WebUtils.parseInt(request.getParameter("pageNo"),1)+1));
+```
+#### 删除图书后
+
+book_manager.jsp的”删除“添加上参数`&pageNo=${requestScope.page.pageNo}`
+```html
+<td><a class="deleteClass" href="manager/bookServlet?action=delete&id=${book.id}&pageNo=${requestScope.page.pageNo}">删除</a></td>
+```
+book_edit.jsp页面form表单中使用隐藏域记录下pageNo参数。    
+(添加图书时改好了)
+
+BookServlet中delete方法，重定向时，改成`acthion=page`并获取当前页码追加上(`&pageNo=" +
+req.getParameter("pageNo")`)进行跳转。以回到当前页查看图书被删除了没
+```java
+response.sendRedirect(request.getContextPath() + "/manager/bookServlet?action=page&pageNo=" + request.getParameter("pageNo"));
+```
+#### 修改图书后
+
+book_manager.jsp在修改的请求地址上追加当前页码参数`&pageNo=${requestScope.page.pageNo}`
+```html
+<td><a href="manager/bookServlet?action=getBook&id=${book.id}&pageNo=${requestScope.page.pageNo}">修改</a></td>
+
+```
+book_edit.jsp页面form表单中使用隐藏域记录下pageNo参数  
+(添加图书时改好了)
+
+BookServlet中update方法，重定向时，改成`acthion=page`并获取当前页码追加上(`&pageNo=" +
+req.getParameter("pageNo")`)进行跳转
+```java
+response.sendRedirect(request.getContextPath() + "/manager/bookServlet?action=page&pageNo=" + request.getParameter("pageNo"));
+```
+
+> 现在分页之后，都用请求page方法了，list方法用不上了，可以注释掉

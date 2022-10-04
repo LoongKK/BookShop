@@ -32,7 +32,7 @@ public class WebUtils {
         try{
             return Integer.parseInt(strInt);
         }catch (NumberFormatException e){
-            e.printStackTrace();
+            //e.printStackTrace();//还是把这里注释掉了，分页那里刚点进"图书管理"pageNo是null，打印异常挺别扭的，正常应该用日志工具输出到日志里
             return defaultValue;//写在方法尾也行
         }
     }

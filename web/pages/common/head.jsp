@@ -20,6 +20,7 @@
             + request.getServerPort()
             + request.getContextPath()
             + "/";
+    request.setAttribute("basePath",basePath);
 %>
 
 <%--动态的获取base的href属性值<%=basePath%>--%>

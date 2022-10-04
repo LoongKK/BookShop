@@ -1,6 +1,7 @@
 package com.loong.test;
 
 import com.loong.pojo.Book;
+import com.loong.pojo.Page;
 import com.loong.service.BookService;
 import com.loong.service.impl.BookServiceImpl;
 import org.junit.Test;
@@ -49,5 +50,11 @@ public class BookServiceTest {
         for (Book book : bookList) {
             System.out.println(book);
         }
+    }
+
+    @Test
+    public void page() {
+        Page<Book> page = bookService.page(2, 4);
+        System.out.println(page);
     }
 }
