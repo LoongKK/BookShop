@@ -801,7 +801,7 @@ public static int parseInt(String strInt,int defaultValue){
 	</div>
     </tr>
 </table>
-![page.png](readme.assets/page.png)
+![page.png](readme.assets/page.png)  
 ![分页.bmp](readme.assets/分页.bmp)
 
 ### 分页的对象模型Page类
