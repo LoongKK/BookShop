@@ -18,17 +18,19 @@ public class Page<T> {
     private Integer pageSize=PAGE_SIZE;//当前页显示数量 默认4
     private Integer pageTotalCount;//总记录数
     private List<T> items;//当前数据
+    private String url;//供抽离分页功能使用
     //空参 有参构造器  getter setter tostring
 
     public Page() {
     }
 
-    public Page(Integer pageNo, Integer pageTotal, Integer pageSize, Integer pageTotalCount, List<T> items) {
+    public Page(Integer pageNo, Integer pageTotal, Integer pageSize, Integer pageTotalCount, List<T> items,String url) {
         this.pageNo = pageNo;
         this.pageTotal = pageTotal;
         this.pageSize = pageSize;
         this.pageTotalCount = pageTotalCount;
         this.items = items;
+        this.url=url;
     }
 
     public Integer getPageNo() {
@@ -78,6 +80,14 @@ public class Page<T> {
         this.items = items;
     }
 
+    public String getUrl() {
+        return url;
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
     @Override
     public String toString() {
         return "Page{" +
@@ -86,6 +96,7 @@ public class Page<T> {
                 ", pageSize=" + pageSize +
                 ", pageTotalCount=" + pageTotalCount +
                 ", items=" + items +
+                ", url='" + url + '\'' +
                 '}';
     }
 }
