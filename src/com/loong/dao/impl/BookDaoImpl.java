@@ -68,5 +68,19 @@ public class BookDaoImpl extends BaseDao<Book> implements BookDao{
         return getBeanList(conn,sql,begin,pageSize);
     }
 
+    @Override
+    public Integer queryForPageTotalCount(Connection conn, int min, int max) {
+        String sql="SELECT COUNT(*) FROM t_book WHERE `price` BETWEEN ? AND ?";
+        Number count = (Number) getValue(conn, sql,min,max);
+        return count.intValue();
+    }
+
+    @Override
+    public List<Book> queryForPageItems(Connection conn, int begin, int pageSize, int min, int max) {
+        String sql = "SELECT `id`,`name`,`author`,`price`,`sales`,`stock`,`img_path` imgPath " +
+                "FROM t_book WHERE `price` BETWEEN ? AND ? LIMIT ?,?";
+        return getBeanList(conn,sql,min,max,begin,pageSize);
+    }
+
 
 }

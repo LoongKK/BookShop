@@ -1246,3 +1246,94 @@ ii)ClientBookServlet的page方法中：
 在第三步将page对象保存到域之前，先`page.setUrl("client/bookServlet?action=page")`  
 iii)BookServlet的page方法中：  
 在第三步将page对象保存到域之前，先`page.setUrl("manager/bookServlet?action=page")`
+
+## 首页价格区间搜索
+
+①
+BookDao.java接口增加两个方法
+```java
+    /**
+     * 求价格区间内的总记录数
+     * @param conn
+     * @param min 最低价格
+     * @param max 最高价格
+     * @return 价格区间内的总记录数
+     */
+    public Integer queryForPageTotalCount(Connection conn,int min,int max);
+
+    /**
+     * 求价格区间内的当前页的数据
+     * @param conn
+     * @param begin
+     * @param pageSize
+     * @param min
+     * @param max
+     * @return 价格区间内的当前页的数据
+     */
+    public List<Book> queryForPageItems(Connection conn, int begin, int pageSize,int min,int max);
+```
+BookDaoImpl中实现方法
+```java
+    @Override
+public Integer queryForPageTotalCount(Connection conn, int min, int max) {
+        String sql="SELECT COUNT(*) FROM t_book WHERE `price` BETWEEN ? AND ?";
+        Number count = (Number) getValue(conn, sql,min,max);
+        return count.intValue();
+        }
+
+@Override
+public List<Book> queryForPageItems(Connection conn, int begin, int pageSize, int min, int max) {
+        String sql = "SELECT `id`,`name`,`author`,`price`,`sales`,`stock`,`img_path` imgPath " +
+        "FROM t_book WHERE `price` BETWEEN ? AND ? LIMIT ?,?";
+        return getBeanList(conn,sql,min,max,begin,pageSize);
+        }
+```
+②BookService和BookServiceImpl中增加`Page pageByPrice()`方法  
+复制page方法改改就行，使用刚添加的重载的两个新方法把min、max传过去。  
+③ClientBookServlet中增加`void pageByPrice()`方法
+```java
+ //处理价格区间的分页
+protected void pageByPrice(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //1、获取请求的参数pageNo，pagesize，min，max
+        int pageNo = WebUtils.parseInt(req.getParameter("pageNo"), 1);
+        int pageSize = WebUtils.parseInt(req.getParameter("pageSize"), Page.PAGE_SIZE);
+        int min = WebUtils.parseInt(req.getParameter("min"), 0);
+        int max = WebUtils.parseInt(req.getParameter("max"), Integer.MAX_VALUE);
+        //2、获取Page对象
+        Page<Book> page = bookService.pageByPrice(pageNo, pageSize, min, max);
+        //设置 url 的分页请求地址（为”分页条的抽取“）
+        page.setUrl("client/bookServlet?action=pageByPrice");
+        //3、Page对象保存到Request域中
+        req.setAttribute("page",page);
+        //4、请求转发到/pages/client/index.jsp页面
+        req.getRequestDispatcher("/pages/client/index.jsp").forward(req,resp);
+        }
+```
+
+④修改client/index.jsp ，更改请求地址，增加隐藏于，并使用el表达式进行价格回显
+```html
+<div class="book_cond">
+    <form action="client/bookServlet" method="get">
+        <input type="hidden" name="action" value="pageByPrice">
+        价格：<input id="min" type="text" name="min" value="${param.min}"> 元 -
+        <input id="max" type="text" name="max" value="${param.max}"> 元
+        <input type="submit" value="查询" />
+    </form>
+</div>
+```
+⑤解决分页条跳转页面没有价格回显问题  
+修改ClientBookServlet的pageByPrice方法，要在设置分页的url时，把min、max带上
+```java
+//解决分页条跳转页面没有价格回显 要在设置分页的url时，把min、max带上
+        StringBuffer sb = new StringBuffer("client/bookServlet?action=pageByPrice");
+        //如果输入框填写了最小价格的话，就带上min——注意这里是网页传来的参数min 不是进行类型转换后的。
+        if(req.getParameter("min")!=null){
+            sb.append("&min=").append(req.getParameter("min"));
+        }
+        //如果输入框填写了最小价格的话，就带上max——注意这里是网页传来的参数max 不是进行类型转换后的。
+        if(req.getParameter("max")!=null){
+            sb.append("&max=").append(req.getParameter("max"));
+        }
+        //设置 url 的分页请求地址（为”分页条的抽取“）
+        page.setUrl(sb.toString());
+```

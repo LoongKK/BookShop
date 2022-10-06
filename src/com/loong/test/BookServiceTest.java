@@ -57,4 +57,10 @@ public class BookServiceTest {
         Page<Book> page = bookService.page(2, 4);
         System.out.println(page);
     }
+
+    @Test
+    public void pageByPrice() {
+        Page<Book> page = bookService.pageByPrice(2, 4,0,500);
+        System.out.println(page);
+    }
 }

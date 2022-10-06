@@ -23,4 +23,14 @@ public interface BookService {
      * @return 包含数据的Page对象
      */
     Page<Book> page(int pageNo, int pageSize);
+
+    /**
+     * 返回包含价格区间内Book信息的Page对象
+     * @param pageNo
+     * @param pageSize
+     * @param min
+     * @param max
+     * @return
+     */
+    Page<Book> pageByPrice(int pageNo, int pageSize,int min,int max);
 }

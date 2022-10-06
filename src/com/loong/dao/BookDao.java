@@ -40,4 +40,25 @@ public interface BookDao {
      * @return 当前页的size个Book对象元素的List集合
      */
     public List<Book> queryForPageItems(Connection conn, int begin, int pageSize);
+
+    /**
+     * 求价格区间内的总记录数
+     * @param conn
+     * @param min 最低价格
+     * @param max 最高价格
+     * @return 价格区间内的总记录数
+     */
+    public Integer queryForPageTotalCount(Connection conn,int min,int max);
+
+    /**
+     * 求价格区间内的当前页的数据
+     * @param conn
+     * @param begin
+     * @param pageSize
+     * @param min
+     * @param max
+     * @return 价格区间内的当前页的数据
+     */
+    public List<Book> queryForPageItems(Connection conn, int begin, int pageSize,int min,int max);
+
 }
