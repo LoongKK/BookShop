@@ -1337,3 +1337,547 @@ protected void pageByPrice(HttpServletRequest req, HttpServletResponse resp) thr
         //设置 url 的分页请求地址（为”分页条的抽取“）
         page.setUrl(sb.toString());
 ```
+# 优化： 显示用户名、登出、验证码
+
+## 登陆--显示用户名
+UserServlet 程序中保存用户登录的信息
+```java
+ //根据登录结果进行跳转
+    if (loginUser != null){
+        System.out.println("登录成功");
+        //保存用户登录信息到Session域中
+        req.getSession().setAttribute("user",loginUser);
+
+        req.getRequestDispatcher("/pages/user/login_success.jsp").forward(req,resp);
+    }else
+        。。。
+```
+修改 login_succuess_menu.jsp
+```html
+<span>欢迎<span class="um_span">${sessionScope.user.username}</span>光临尚硅谷书城</span>
+```
+修改clent/index.jsp
+```html
+	<div>
+		<%--如果用户还没有登录，显示 登录和注册的菜单 --%>
+		<c:if test="${empty sessionScope.user}">
+			<a href="pages/user/login.jsp">登录</a>
+			<a href="pages/user/regist.jsp">注册</a>
+		</c:if>
+		<%--如果用户已经登录，显示 登录成功之后的用户信息功能--%>
+		<c:if test="${not empty sessionScope.user}">
+			<span>欢迎<span class="um_span">${sessionScope.user.username}</span>光临尚硅谷书城</span>
+			<a href="pages/order/order.jsp">我的订单</a>
+			<a href="index.jsp">注销</a>&nbsp;&nbsp;
+		</c:if>
+		<a href="pages/cart/cart.jsp">购物车</a>
+		<a href="pages/manager/manager.jsp">后台管理</a>
+	</div>
+```
+## 登出--注销用户
+两步：  
+1、销毁 Session 中用户登录的信息（或者销毁 Session）  
+2、重定向到首页（或登录页面）。  
+UserServlet 程序中添加 logout 方法  
+```java
+ protected void logout(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //1、销毁 Session 中用户登录的信息（或者销毁 Session）
+        req.getSession().invalidate();
+        //2、重定向到首页（或登录页面）。
+        resp.sendRedirect(req.getContextPath());
+    }
+```
+修改client/index.jsp【注销】的菜单地址
+```html
+  <a href="userServlet?action=logout">注销</a>
+```
+## 表单重复提交之--验证码
+表单重复提交有三种常见的情况：  
+一：提交完表单。服务器使用请求转来进行页面跳转。这个时候，用户按下功能键 F5，就会发起最后一次的请求。 造成表单重复提交问题。解决方法：使用重定向来进行跳转  
+二：用户正常提交服务器，但是由于网络延迟等原因，迟迟未收到服务器的响应，这个时候，用户以为提交失败， 就会着急，然后多点了几次提交操作，也会造成表单重复提交。   
+三：用户正常提交服务器。服务器也没有延迟，但是提交完成后，用户回退浏览器。重新提交。也会造成表单重复 提交。  
+二、三的解决办法：使用验证码
+
+![image-20221009093023201](readme.assets/image-20221009093023201.png)
+
+## 谷歌 kaptcha 图片验证码的使用
+
+谷歌验证码 kaptcha 使用步骤如下：
+1、导入谷歌验证码的 jar 包
+kaptcha-2.3.2.jar
+2、在 web.xml 中去配置用于生成验证码的 Servlet 程序。访问这个servlet就会生产验证码
+
+```xml
+    <servlet>
+        <servlet-name>KaptchaServlet</servlet-name>
+        <servlet-class>com.google.code.kaptcha.servlet.KaptchaServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>KaptchaServlet</servlet-name>
+        <url-pattern>/kaptcha.jpg</url-pattern>
+    </servlet-mapping>
+```
+
+3、在表单中使用 img 标签去显示验证码图片并使用它
+
+```html
+<img src="kaptcha.jpg" alt="" style="width: 120px; height: 40px;float: right;"> <br>
+这里src是servlet的访问路径，因为前面用了<base>标签(http://localhost:8080/BookShop/)，所以只写了kaptcha.jpg
+```
+
+4、在服务器获取谷歌生成的验证码和客户端发送过来的验证码比较使用。
+
+UserServlet中：
+
+```java
+import static com.google.code.kaptcha.Constants.KAPTCHA_SESSION_KEY;//导入静态常量
+
+regist方法中：
+。。。
+	// 获取 Session 中的验证码
+	String token = (String)req.getSession().getAttribute(KAPTCHA_SESSION_KEY);
+	// 删除 Session 中的验证码
+	req.getSession().removeAttribute(KAPTCHA_SESSION_KEY);
+	//判断验证码可用
+	if (token != null && token.equalsIgnoreCase(req.getParameter("code"))) {
+		//验证用户名可用性，若可用就
+        	//保存到数据库
+        	//重定向到注册成功界面(因为要解决刷新 表单重复提交问题，所以使用重定向)
+        //若用户名不可用。。。
+	} else {
+		//"验证码错误"。。。
+	}
+}
+```
+5.实现切换验证码：当验证码图片看不清时可点击图片切换。修改regist.jsp：
+
+```html
+img标签加上id属性
+<img id="code_img"。。。
+```
+
+
+
+```javascript
+			// 给验证码的图片，绑定单击事件
+			$("#code_img").click(function () {
+				// 在事件响应的 function 函数中有一个 this 对象。这个 this 对象，是当前正在响应事件的 dom 对象
+				// src 属性表示验证码 img 标签的 图片路径。它可读，可写
+				this.src = "${basePath}kaptcha.jpg?d=" + new Date();
+			});
+```
+
+> 注：路径后面一定要加new Date()
+>
+> 浏览器为了让请求速度更快。就会每次请求的内容缓存到了浏览器端（要么硬盘上,要么内存中）。
+>
+> 因为有写浏览器如果访问相同的地址会去缓存中查找，就刷新不了验证码了所以要加`new Data()`（或`new Date().getMilliseconds()`或`new Date().getTime()`）使其访问地址不同，能刷新出验证码。
+>
+> 可以不加key，直接`this.src = "${basePath}kaptcha.jpg?" + new Date();`
+
+
+
+## (附)一个验证码工具类(来自黑马程序员)
+
+工具类
+
+```java
+package com.xxx.util;
+
+import javax.imageio.ImageIO;
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.Random;
+
+/**
+ * 生成验证码工具类
+ */
+public class CheckCodeUtil {
+
+    public static final String VERIFY_CODES = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static Random random = new Random();
+
+
+
+    /**
+     * 输出随机验证码图片流,并返回验证码值（一般传入输出流，响应response页面端，Web项目用的较多）
+     *
+     * @param w
+     * @param h
+     * @param os
+     * @param verifySize
+     * @return
+     * @throws IOException
+     */
+    public static String outputVerifyImage(int w, int h, OutputStream os, int verifySize) throws IOException {
+        String verifyCode = generateVerifyCode(verifySize);
+        outputImage(w, h, os, verifyCode);
+        return verifyCode;
+    }
+
+    /**
+     * 使用系统默认字符源生成验证码
+     *
+     * @param verifySize 验证码长度
+     * @return
+     */
+    public static String generateVerifyCode(int verifySize) {
+        return generateVerifyCode(verifySize, VERIFY_CODES);
+    }
+
+    /**
+     * 使用指定源生成验证码
+     *
+     * @param verifySize 验证码长度
+     * @param sources    验证码字符源
+     * @return
+     */
+    public static String generateVerifyCode(int verifySize, String sources) {
+        // 未设定展示源的字码，赋默认值大写字母+数字
+        if (sources == null || sources.length() == 0) {
+            sources = VERIFY_CODES;
+        }
+        int codesLen = sources.length();
+        Random rand = new Random(System.currentTimeMillis());
+        StringBuilder verifyCode = new StringBuilder(verifySize);
+        for (int i = 0; i < verifySize; i++) {
+            verifyCode.append(sources.charAt(rand.nextInt(codesLen - 1)));
+        }
+        return verifyCode.toString();
+    }
+
+    /**
+     * 生成随机验证码文件,并返回验证码值 (生成图片形式，用的较少)
+     *
+     * @param w
+     * @param h
+     * @param outputFile
+     * @param verifySize
+     * @return
+     * @throws IOException
+     */
+    public static String outputVerifyImage(int w, int h, File outputFile, int verifySize) throws IOException {
+        String verifyCode = generateVerifyCode(verifySize);
+        outputImage(w, h, outputFile, verifyCode);
+        return verifyCode;
+    }
+
+
+
+    /**
+     * 生成指定验证码图像文件
+     *
+     * @param w
+     * @param h
+     * @param outputFile
+     * @param code
+     * @throws IOException
+     */
+    public static void outputImage(int w, int h, File outputFile, String code) throws IOException {
+        if (outputFile == null) {
+            return;
+        }
+        File dir = outputFile.getParentFile();
+        //文件不存在
+        if (!dir.exists()) {
+            //创建
+            dir.mkdirs();
+        }
+        try {
+            outputFile.createNewFile();
+            FileOutputStream fos = new FileOutputStream(outputFile);
+            outputImage(w, h, fos, code);
+            fos.close();
+        } catch (IOException e) {
+            throw e;
+        }
+    }
+
+    /**
+     * 输出指定验证码图片流
+     *
+     * @param w
+     * @param h
+     * @param os
+     * @param code
+     * @throws IOException
+     */
+    public static void outputImage(int w, int h, OutputStream os, String code) throws IOException {
+        int verifySize = code.length();
+        BufferedImage image = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Random rand = new Random();
+        Graphics2D g2 = image.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        // 创建颜色集合，使用java.awt包下的类
+        Color[] colors = new Color[5];
+        Color[] colorSpaces = new Color[]{Color.WHITE, Color.CYAN,
+                Color.GRAY, Color.LIGHT_GRAY, Color.MAGENTA, Color.ORANGE,
+                Color.PINK, Color.YELLOW};
+        float[] fractions = new float[colors.length];
+        for (int i = 0; i < colors.length; i++) {
+            colors[i] = colorSpaces[rand.nextInt(colorSpaces.length)];
+            fractions[i] = rand.nextFloat();
+        }
+        Arrays.sort(fractions);
+        // 设置边框色
+        g2.setColor(Color.GRAY);
+        g2.fillRect(0, 0, w, h);
+
+        Color c = getRandColor(200, 250);
+        // 设置背景色
+        g2.setColor(c);
+        g2.fillRect(0, 2, w, h - 4);
+
+        // 绘制干扰线
+        Random random = new Random();
+        // 设置线条的颜色
+        g2.setColor(getRandColor(160, 200));
+        for (int i = 0; i < 20; i++) {
+            int x = random.nextInt(w - 1);
+            int y = random.nextInt(h - 1);
+            int xl = random.nextInt(6) + 1;
+            int yl = random.nextInt(12) + 1;
+            g2.drawLine(x, y, x + xl + 40, y + yl + 20);
+        }
+
+        // 添加噪点
+        // 噪声率
+        float yawpRate = 0.05f;
+        int area = (int) (yawpRate * w * h);
+        for (int i = 0; i < area; i++) {
+            int x = random.nextInt(w);
+            int y = random.nextInt(h);
+            // 获取随机颜色
+            int rgb = getRandomIntColor();
+            image.setRGB(x, y, rgb);
+        }
+        // 添加图片扭曲
+        shear(g2, w, h, c);
+
+        g2.setColor(getRandColor(100, 160));
+        int fontSize = h - 4;
+        Font font = new Font("Algerian", Font.ITALIC, fontSize);
+        g2.setFont(font);
+        char[] chars = code.toCharArray();
+        for (int i = 0; i < verifySize; i++) {
+            AffineTransform affine = new AffineTransform();
+            affine.setToRotation(Math.PI / 4 * rand.nextDouble() * (rand.nextBoolean() ? 1 : -1), (w / verifySize) * i + fontSize / 2, h / 2);
+            g2.setTransform(affine);
+            g2.drawChars(chars, i, 1, ((w - 10) / verifySize) * i + 5, h / 2 + fontSize / 2 - 10);
+        }
+
+        g2.dispose();
+        ImageIO.write(image, "jpg", os);
+    }
+
+    /**
+     * 随机颜色
+     *
+     * @param fc
+     * @param bc
+     * @return
+     */
+    private static Color getRandColor(int fc, int bc) {
+        if (fc > 255) {
+            fc = 255;
+        }
+        if (bc > 255) {
+            bc = 255;
+        }
+        int r = fc + random.nextInt(bc - fc);
+        int g = fc + random.nextInt(bc - fc);
+        int b = fc + random.nextInt(bc - fc);
+        return new Color(r, g, b);
+    }
+
+    private static int getRandomIntColor() {
+        int[] rgb = getRandomRgb();
+        int color = 0;
+        for (int c : rgb) {
+            color = color << 8;
+            color = color | c;
+        }
+        return color;
+    }
+
+    private static int[] getRandomRgb() {
+        int[] rgb = new int[3];
+        for (int i = 0; i < 3; i++) {
+            rgb[i] = random.nextInt(255);
+        }
+        return rgb;
+    }
+
+    private static void shear(Graphics g, int w1, int h1, Color color) {
+        shearX(g, w1, h1, color);
+        shearY(g, w1, h1, color);
+    }
+
+    private static void shearX(Graphics g, int w1, int h1, Color color) {
+
+        int period = random.nextInt(2);
+
+        boolean borderGap = true;
+        int frames = 1;
+        int phase = random.nextInt(2);
+
+        for (int i = 0; i < h1; i++) {
+            double d = (double) (period >> 1)
+                    * Math.sin((double) i / (double) period
+                    + (6.2831853071795862D * (double) phase)
+                    / (double) frames);
+            g.copyArea(0, i, w1, 1, (int) d, 0);
+            if (borderGap) {
+                g.setColor(color);
+                g.drawLine((int) d, i, 0, i);
+                g.drawLine((int) d + w1, i, w1, i);
+            }
+        }
+
+    }
+
+    private static void shearY(Graphics g, int w1, int h1, Color color) {
+
+        int period = random.nextInt(40) + 10; // 50;
+
+        boolean borderGap = true;
+        int frames = 20;
+        int phase = 7;
+        for (int i = 0; i < w1; i++) {
+            double d = (double) (period >> 1)
+                    * Math.sin((double) i / (double) period
+                    + (6.2831853071795862D * (double) phase)
+                    / (double) frames);
+            g.copyArea(i, 0, 1, h1, 0, (int) d);
+            if (borderGap) {
+                g.setColor(color);
+                g.drawLine(i, (int) d, i, 0);
+                g.drawLine(i, (int) d + h1, i, h1);
+            }
+
+        }
+
+    }
+}
+```
+
+修改Register.jsp页面，将验证码的图片从后台获取
+
+```jsp
+<tr>
+    <td>验证码</td>
+        <td class="inputs">
+        <input name="checkCode" type="text" id="checkCode">
+        <img id="checkCodeImg" src="/brand-demo/checkCodeServlet">
+        <a href="#" id="changeImg" >看不清？</a>
+    </td>
+</tr>
+
+<script>
+    document.getElementById("changeImg").onclick = function () {
+       	//路径后面添加时间戳的目的是避免浏览器进行缓存静态资源
+        document.getElementById("checkCodeImg").src = "/brand-demo/checkCodeServlet?"+new Date().getMilliseconds();
+    }
+</script>
+```
+
+编写CheckCodeServlet类，用来接收请求生成验证码，将验证码存入Session对象
+
+```java
+@WebServlet("/checkCodeServlet")
+public class CheckCodeServlet extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+
+        // 生成验证码
+        ServletOutputStream os = response.getOutputStream();
+        String checkCode = CheckCodeUtil.outputVerifyImage(100, 50, os, 4);
+
+        // 存入Session
+        HttpSession session = request.getSession();
+        session.setAttribute("checkCodeGen",checkCode);
+
+
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        this.doGet(request, response);
+    }
+}
+```
+
+在RegisterServlet中，获取页面的和session对象中的验证码，进行对比
+
+```java
+package com.itheima.web;
+
+import com.itheima.pojo.User;
+import com.itheima.service.UserService;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.*;
+import java.io.IOException;
+
+@WebServlet("/registerServlet")
+public class RegisterServlet extends HttpServlet {
+    private UserService service = new UserService();
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+       //1. 获取用户名和密码数据
+        String username = request.getParameter("username");
+        String password = request.getParameter("password");
+
+        User user = new User();
+        user.setUsername(username);
+        user.setPassword(password);
+
+        // 获取用户输入的验证码
+        String checkCode = request.getParameter("checkCode");
+
+        // 程序生成的验证码，从Session获取
+        HttpSession session = request.getSession();
+        String checkCodeGen = (String) session.getAttribute("checkCodeGen");
+
+        // 比对
+        if(!checkCodeGen.equalsIgnoreCase(checkCode)){
+
+            request.setAttribute("register_msg","验证码错误");
+            request.getRequestDispatcher("/register.jsp").forward(request,response);
+
+            // 不允许注册
+            return;
+        }
+        //2. 调用service 注册
+        boolean flag = service.register(user);
+        //3. 判断注册成功与否
+        if(flag){
+             //注册功能，跳转登陆页面
+
+            request.setAttribute("register_msg","注册成功，请登录");
+            request.getRequestDispatcher("/login.jsp").forward(request,response);
+        }else {
+            //注册失败，跳转到注册页面
+
+            request.setAttribute("register_msg","用户名已存在");
+            request.getRequestDispatcher("/register.jsp").forward(request,response);
+        }
+
+
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        this.doGet(request, response);
+    }
+}
+```

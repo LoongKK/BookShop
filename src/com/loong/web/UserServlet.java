@@ -13,32 +13,52 @@ import javax.servlet.http.*;
 import java.io.IOException;
 import java.lang.reflect.Method;
 
+import static com.google.code.kaptcha.Constants.KAPTCHA_SESSION_KEY;
+
+
 public class UserServlet extends BaseServlet {
- //doPost抽取到BaseServlet中了，只需继承BaseServlet即可(也就继承了其中的doPost方法)
+    //doPost抽取到BaseServlet中了，只需继承BaseServlet即可(也就继承了其中的doPost方法)
 
-protected void login(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-    //原来LoginServlet中的代码
-    //获取参数
-    String username = req.getParameter("username");
-    String password = req.getParameter("password");
+    protected void login(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //原来LoginServlet中的代码
+        //获取参数
+        String username = req.getParameter("username");
+        String password = req.getParameter("password");
 
-    //登录业务
-    UserService userService=new UserServiceImpl();
-    User loginUser = userService.login(new User(null, username, password, null));
+        //登录业务
+        UserService userService = new UserServiceImpl();
+        User loginUser = userService.login(new User(null, username, password, null));
 
-    //根据登录结果进行跳转
-    if (loginUser != null){
-        System.out.println("登录成功");
-        req.getRequestDispatcher("/pages/user/login_success.jsp").forward(req,resp);
-    }else{
-        //System.out.println("登录失败");
-        //把错误信息、回显的表单项信息，保存到Request域中
-        req.setAttribute("msg","用户名或密码错误");
-        req.setAttribute("username",username);
-        //跳转登录页面
-        req.getRequestDispatcher("/pages/user/login.jsp").forward(req,resp);
+        //根据登录结果进行跳转
+        if (loginUser != null) {
+            System.out.println("登录成功");
+            //保存用户登录信息到Session域中
+            req.getSession().setAttribute("user", loginUser);
+
+            req.getRequestDispatcher("/pages/user/login_success.jsp").forward(req, resp);
+        } else {
+            //System.out.println("登录失败");
+            //把错误信息、回显的表单项信息，保存到Request域中
+            req.setAttribute("msg", "用户名或密码错误");
+            req.setAttribute("username", username);
+            //跳转登录页面
+            req.getRequestDispatcher("/pages/user/login.jsp").forward(req, resp);
+        }
     }
-}
+
+    /**
+     * 注销
+     * @param req
+     * @param resp
+     * @throws ServletException
+     * @throws IOException
+     */
+    protected void logout(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //1、销毁 Session 中用户登录的信息（或者销毁 Session）
+        req.getSession().invalidate();
+        //2、重定向到首页（或登录页面）。
+        resp.sendRedirect(req.getContextPath());
+    }
 
     //使用BeanUtils(封装在WebUtils工具类中)的regist方法：
     protected void regist(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -50,33 +70,39 @@ protected void login(HttpServletRequest req, HttpServletResponse resp) throws Se
         //下面用参数的时候，直接通过bean的getter调用。如user.getUsername()相当于req.getParameter("username")
         //甚至”保存到数据库“时直接使用user对象
 
+        // 获取 Session 中的验证码
+        String token = (String) req.getSession().getAttribute(KAPTCHA_SESSION_KEY);
+        // 删除 Session 中的验证码
+        req.getSession().removeAttribute(KAPTCHA_SESSION_KEY);
         //验证码是否正确。（目前没学如何生成验证码，是写死的"abcde"）
-        if("abcde".equals(req.getParameter("code"))){
-            UserService userService=new UserServiceImpl();
+        if (token != null && token.equalsIgnoreCase(req.getParameter("code"))) {
+            UserService userService = new UserServiceImpl();
             //用户名是否可用
-            if(!userService.existsUsername(user.getUsername())){
+            if (!userService.existsUsername(user.getUsername())) {
                 //保存到数据库
                 userService.registUser(user);
-                //跳转到注册成功页面
-                req.getRequestDispatcher("/pages/user/regist_success.jsp").forward(req,resp);
+//                //跳转到注册成功页面
+//                req.getRequestDispatcher("/pages/user/regist_success.jsp").forward(req, resp);
+                //因为要解决刷新 表单重复提交问题，使用重定向
+                resp.sendRedirect(req.getContextPath()+"/pages/user/regist_success.jsp");
                 System.out.println("注册成功");
-            }else{
+            } else {
                 //回显的错误信息
-                req.setAttribute("msg","用户名已存在！");
+                req.setAttribute("msg", "用户名已存在！");
                 //回显的表单项值信息
-                req.setAttribute("username",user.getUsername());
-                req.setAttribute("email",user.getUsername());
+                req.setAttribute("username", user.getUsername());
+                req.setAttribute("email", user.getUsername());
 
-                req.getRequestDispatcher("/pages/user/regist.jsp").forward(req,resp);
+                req.getRequestDispatcher("/pages/user/regist.jsp").forward(req, resp);
             }
-        }else{
+        } else {
             //回显的错误信息
-            req.setAttribute("msg","验证码错误！");
+            req.setAttribute("msg", "验证码错误！");
             //回显的表单项值信息
-            req.setAttribute("username",user.getUsername());
-            req.setAttribute("email",user.getEmail());
+            req.setAttribute("username", user.getUsername());
+            req.setAttribute("email", user.getEmail());
 
-            req.getRequestDispatcher("/pages/user/regist.jsp").forward(req,resp);
+            req.getRequestDispatcher("/pages/user/regist.jsp").forward(req, resp);
         }
     }
 
