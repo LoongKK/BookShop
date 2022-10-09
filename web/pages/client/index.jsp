@@ -7,6 +7,15 @@
 <meta charset="UTF-8">
 <title>书城首页</title>
 	<jsp:include page="../common/head.jsp"></jsp:include>
+	<%--为"加入购物车"按钮添加绑定单机事件--%>
+	<script type="text/javascript">
+		$(function(){
+			$("button.addToCart").click(function (){
+				// javaScript 语言中提供了一个 location 地址栏对象，可以获取浏览器地址栏中的地址
+				location.href="${pageScope.basePath}cartServlet?action=addItem&id="+$(this).attr("bookId");
+			})
+		});
+	</script>
 </head>
 <body>
 	
@@ -39,12 +48,30 @@
 						<input type="submit" value="查询" />
 				</form>
 			</div>
+
 			<div style="text-align: center">
-				<span>您的购物车中有3件商品</span>
-				<div>
-					您刚刚将<span style="color: red">时间简史</span>加入到了购物车中
-				</div>
+				<c:if test="${empty sessionScope.cart.items}">
+					<%--购物车为空的输出--%>
+					<span> </span>
+					<div>
+						<span style="color: red">当前购物车为空</span>
+					</div>
+				</c:if>
+				<c:if test="${not empty sessionScope.cart.items}">
+					<%--购物车非空的输出--%>
+					<span>您的购物车中有 ${sessionScope.cart.totalCount} 件商品</span>
+					<div>
+						您刚刚将<span style="color: red">${sessionScope.lastName}</span>加入到了购物车中
+					</div>
+				</c:if>
 			</div>
+
+<%--			<div style="text-align: center">--%>
+<%--				<span>您的购物车中有3件商品</span>--%>
+<%--				<div>--%>
+<%--					您刚刚将<span style="color: red">时间简史</span>加入到了购物车中--%>
+<%--				</div>--%>
+<%--			</div>--%>
 
 			<%--显示图书信息--%>
 			<c:forEach items="${requestScope.page.items}" var="book">
@@ -74,7 +101,7 @@
 						<span class="sp2">${book.stock}</span>
 					</div>
 					<div class="book_add">
-						<button>加入购物车</button>
+						<button bookId="${book.id}" class="addToCart">加入购物车</button>
 					</div>
 				</div>
 			</div>

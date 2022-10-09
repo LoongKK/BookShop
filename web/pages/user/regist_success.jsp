@@ -21,13 +21,13 @@
 		<div id="header">
 				<img class="logo_img" alt="" src="static/img/logo.gif" >
 				<span class="wel_word"></span>
-			<!--静态包含登录成功后的菜单-->
-			<%@ include file="/pages/common/login_success_menu.jsp" %>
+<%--			<!--静态包含登录成功后的菜单-->--%>
+<%--			<%@ include file="/pages/common/login_success_menu.jsp" %>--%>
 		</div>
 		
 		<div id="main">
 		
-			<h1>注册成功! <a href="index.jsp">转到主页</a></h1>
+			<h1>注册成功! <a href="pages/user/login.jsp">转到登录页</a></h1>
 	
 		</div>
 

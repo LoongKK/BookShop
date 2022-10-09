@@ -1,6 +1,9 @@
 # BookShop
 
 尚硅谷_书城项目
+
+[GitHub - LoongKK/BookShop](https://github.com/LoongKK/BookShop)
+
 ## 第一次提交
 
 空项目 静态资源  
@@ -190,6 +193,7 @@ web/pages下新建目录common存放公共页面
 
 （1）head 中 css、jquery、base 标签  
 head.jsp
+
 ```html
 <body>
 <%
@@ -1339,6 +1343,8 @@ protected void pageByPrice(HttpServletRequest req, HttpServletResponse resp) thr
 ```
 # 优化： 显示用户名、登出、验证码
 
+（使用session）
+
 ## 登陆--显示用户名
 UserServlet 程序中保存用户登录的信息
 ```java
@@ -1881,3 +1887,465 @@ public class RegisterServlet extends HttpServlet {
     }
 }
 ```
+
+# 第六阶段：购物车模块
+
+## 1、购物车模块分析
+
+### 购物车模型
+
+![image-20221009172710349](readme.assets/image-20221009172710349.png)
+
+由购物车的界面分析出购物车的模型
+
+Cart购物车对象：
+|属性|说明|
+|---|---|
+|totalCount|总商品数量|
+|totalPrice|总商品金颜|
+|items|购物车商品|
+
+CartItem购物车商品项：
+|属性|说明|
+|---|---|
+|id|商品编号|
+|name|商品名称|
+|count|商品数量|
+|price|商品单价|
+|totalPrice|商品总价|
+
+### 实现技术
+
+市面上购物车的实现技术版本有：
+1、Session版本(把购物车信息，保存到Session域中)**今天讲的版本**
+2、数据库版本(把购物车信息，保存到数据库)
+3、redis+数据库+Cookie(使月Cookie+Redis缓存，和数据库)
+
+> 因为采用的保存到Session域中的方式，所以不用编写Dao
+
+### 购物车的功能
+
+![image-20221009173320625](readme.assets/image-20221009173320625.png)
+
+(其中"加入购物车"页面index.jsp。其它在cart.jsp，该页面的“结账”属于订单模块)
+
+
+
+## 2、购物车模型编写
+
+购物车Cart：
+
+```java
+package com.loong.pojo;
+
+import java.math.BigDecimal;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * 购物车对象
+ */
+public class Cart {
+    //后面这两个数据会通过方法计算，不用了
+    //private Integer totalCount;//总商品数量
+    //private BigDecimal totalPrice;//总商品金额
+    private Map<Integer, CartItem> items = new LinkedHashMap<Integer, CartItem>();//key商品编号，value商品信息
+
+    /**
+     * 添加商品项
+     * @param cartItem
+     */
+    public void addItem(CartItem cartItem) {
+        // 先查看购物车中是否已经添加过此商品，如果已添加，则数量累加，商品总价更新;如果没有添加过，直接放到集合中即可
+        CartItem item = items.get(cartItem.getId());//用Map的好处：不用自己遍历比较id 直接通过id获取商品信息
+        if (item == null) {// 之前没添加过此商品
+            items.put(cartItem.getId(), cartItem);
+        } else {// 已经 添加过的情况
+            item.setCount(item.getCount() + 1); // 数量累加
+            //新知识：BigDecimal的乘法 a.multiply(b) 返回值类型也是BigDecimal
+            item.setTotalPrice(item.getPrice().multiply(new BigDecimal(item.getCount()))); // 更新商品总价(【该商品】的总金额)(单价x数量)
+        }
+    }
+
+    /**
+     * 删除商品项
+     */
+    public void deleteItem(Integer id) {
+        items.remove(id);
+    }
+
+    /**
+     * 清空购物车
+     */
+    public void clear() {
+        items.clear();
+    }
+
+    /**
+     * 修改商品数量
+     */
+    public void updateCount(Integer id, Integer count) {
+        // 先查看购物车中是否有此商品。如果有，修改商品数量，更新商品总价
+        CartItem cartItem = items.get(id);
+        if (cartItem != null) {
+            cartItem.setCount(count);// 修改商品数量
+            cartItem.setTotalPrice(cartItem.getPrice().multiply(new BigDecimal(cartItem.getCount()))); // 更新商品总价
+        }
+    }
+
+    /**
+     * 获取总商品数量
+     */
+    public Integer getTotalCount() {
+        Integer totalCount = 0;
+        for (Map.Entry<Integer, CartItem> entry : items.entrySet()) {
+            totalCount += entry.getValue().getCount();
+        }
+        return totalCount;
+    }
+
+    /**
+     * 获取总商品金额
+     */
+    public BigDecimal getTotalPrice() {
+        BigDecimal totalPrice = new BigDecimal(0);
+        for (Map.Entry<Integer, CartItem> entry : items.entrySet()) {
+            totalPrice = totalPrice.add(entry.getValue().getTotalPrice());
+        }
+        return totalPrice;
+    }
+
+    /**
+     * 获取商品信息
+     */
+    public Map<Integer, CartItem> getItems() {
+        return items;
+    }
+
+    /**
+     *设置商品信息
+     */
+    public void setItems(Map<Integer, CartItem> items) {
+        this.items = items;
+    }
+
+    @Override
+    public String toString() {
+        return "Cart{" +
+                "totalCount=" + getTotalCount() +
+                ", totalPrice=" + getTotalPrice() +
+                ", items=" + items +
+                '}';
+    }
+}
+```
+
+购物车的商品项CartItem：
+
+```java
+public class CartItem {
+    private Integer id;
+    private String name;
+    private Integer count;
+    private BigDecimal price;
+    private BigDecimal totalPrice;
+    //构造器 getter setter tostring。。。
+}
+```
+
+## 3、加入购物车功能的实现
+
+创建CartServlet处理购物车业务。加入购物车的方法addItem
+
+```java
+public class CartServlet extends BaseServlet {
+    BookService bookService=new BookServiceImpl();
+    /**
+     * 加入购物车
+     * @param req
+     * @param resp
+     * @throws ServletException
+     * @throws IOException
+     */
+    protected void addItem(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // 获取请求的参数 商品编号
+        int id = WebUtils.parseInt(req.getParameter("id"), 0);
+        // 调用 bookService.queryBookById(id):Book 得到图书的信息
+        Book book = bookService.queryBookById(id);
+        // 把图书信息，转换成为 CartItem 商品项
+        CartItem cartItem = new CartItem(book.getId(),book.getName(),1,book.getPrice(),book.getPrice());
+        // 调用 Cart.addItem(CartItem);添加商品项
+        Cart cart = (Cart) req.getSession().getAttribute("cart");
+        if (cart == null) {
+            cart = new Cart();
+            req.getSession().setAttribute("cart",cart);
+        }
+        cart.addItem(cartItem);
+        System.out.println(cart);
+        System.out.println("请求头 Referer 的值：" + req.getHeader("Referer"));
+        // 重定向回原来商品所在的地址页面
+        resp.sendRedirect(req.getHeader("Referer"));
+    }
+}
+```
+
+![image-20221009202805211](readme.assets/image-20221009202805211.png)
+
+> HTTP协议中的请求头`Referer`:可以把请求发起时的浏览器地址栏中的地址发送给服务器
+
+index.jsp中加入购物车按钮添加bookId和class属性
+
+```html
+<button bookId="${book.id}" class="addToCart">加入购物车</button>
+```
+
+为"加入购物车"按钮添加绑定单机事件
+
+```js
+<script type="text/javascript">
+   $(function(){
+      $("button.addToCart").click(function (){
+         // javaScript 语言中提供了一个 location 地址栏对象，可以获取浏览器地址栏中的地址
+         location.href="${pageScope.basePath}cartServlet?action=addItem&id="+$(this).attr("bookId");
+      })
+   });
+</script>
+```
+
+## 4、购物车的展示
+
+pages/cart/cart.jsp
+
+```html
+ <c:if test="${empty sessionScope.cart.items}">
+            <%--如果购物车空的情况--%>
+            <tr>
+                <td colspan="5"><a href="index.jsp">亲，当前购物车为空！快跟小伙伴们去浏览商品吧！！！</a></td>
+            </tr>
+        </c:if>
+
+        <c:if test="${not empty sessionScope.cart.items}">
+            <%--如果购物车非空的情况--%>
+            <c:forEach items="${sessionScope.cart.items}" var="entry">
+                <tr>
+                    <td>${entry.value.name}</td>
+                    <td>${entry.value.count}</td>
+                    <td>${entry.value.price}</td>
+                    <td>${entry.value.totalPrice}</td>
+                    <td><a href="#">删除</a></td>
+                </tr>
+            </c:forEach>
+        </c:if>
+
+    </table>
+
+    <%--如果购物车非空才输出页面的内容--%>
+    <c:if test="${not empty sessionScope.cart.items}">
+        <div class="cart_info">
+            <span class="cart_span">购物车中共有
+                <span class="b_count">${sessionScope.cart.totalCount}</span>件商品</span>
+            <span class="cart_span">总金额
+                <span class="b_price">${sessionScope.cart.totalPrice}</span>元</span>
+            <span class="cart_span"><a href="#">清空购物车</a></span>
+            <span class="cart_span"><a href="pages/cart/checkout.jsp">去结账</a></span>
+        </div>
+    </c:if>
+```
+
+
+
+## 5、删除购物车商品项
+
+CartServlet 程序deleteItem方法：
+
+```java
+    /**
+     * 删除商品项
+     * @param req
+     * @param resp
+     * @throws ServletException
+     * @throws IOException
+     */
+    protected void deleteItem(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException{
+        // 获取商品编号
+        int id = WebUtils.parseInt(req.getParameter("id"), 0);
+        // 获取购物车对象
+        Cart cart = (Cart) req.getSession().getAttribute("cart");
+        if (cart != null) {
+            // 删除 了购物车商品项
+            cart.deleteItem(id);//或cart.getItems().remove(id);
+            // 重定向回原来购物车展示页面
+            resp.sendRedirect(req.getHeader("Referer"));
+        }
+    }
+```
+
+pages/cart/cart.jsp 为“删除”添加class和href属性
+
+```html
+<td>
+    <a class="deleteItem" href="cartServlet?action=deleteItem&id=${entry.value.id}">删除</a>
+</td>
+```
+
+```html
+<%--    删除的确认提示操作：--%>
+    <script type="text/javascript">
+        $(function () {
+            // 给 【删除】绑定单击事件
+            $("a.deleteItem").click(function () {
+                return confirm("你确定要删除【" + $(this).parent().parent().find("td:first").text() +"】吗?")
+            });
+        });
+    </script>
+```
+
+## 6、清空购物车
+
+CartServlet的clear方法
+
+```java
+/**
+ * 清空购物车
+ * @param req
+ * @param resp
+ * @throws ServletException
+ * @throws IOException
+ */
+protected void clear(HttpServletRequest req, HttpServletResponse resp) throws ServletException,
+        IOException{
+    // 1 获取购物车对象
+    Cart cart = (Cart) req.getSession().getAttribute("cart");
+    if (cart != null) {
+        // 清空购物车
+        cart.clear();
+        // 重定向回原来购物车展示页面
+        resp.sendRedirect(req.getHeader("Referer"));
+    }
+}
+```
+
+cart.jsp 给清空购物车添加href请求地址，和 id 属性
+
+```html
+<span class="cart_span">
+	<a id="clearCart" href="cartServlet?action=clear">清空购物车</a>
+</span>
+```
+
+清空的确认提示操作：
+
+```javascript
+// 给清空购物车绑定单击事件
+$("#clearCart").click(function () {
+	return confirm("你确定要清空购物车吗?");
+});
+```
+
+
+
+## 7、修改购物车商品数量
+
+![image-20221009230046175](readme.assets/image-20221009230046175.png)
+
+![image-20221009232510555](readme.assets/image-20221009232510555.png)
+
+CartServle的updateCount
+
+```java
+/**
+ * 修改商品数量
+ * @param req
+ * @param resp
+ * @throws ServletException
+ * @throws IOException
+ */
+protected void updateCount(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException{
+    // 获取请求的参数 商品编号 、商品数量
+    int id = WebUtils.parseInt(req.getParameter("id"),0);
+    int count = WebUtils.parseInt(req.getParameter("count"), 1);
+    // 获取 Cart 购物车对象
+    Cart cart = (Cart) req.getSession().getAttribute("cart");
+    if (cart != null) {
+        // 修改商品数量
+        cart.updateCount(id,count);
+        // 重定向回原来购物车展示页面
+        resp.sendRedirect(req.getHeader("Referer"));
+    }
+}
+```
+
+pages/cart/cart.jsp 购物车页面：
+
+```html
+<td>
+    <input type="text" style="width: 80px;" 
+           class="updateCount" 
+           bookId="${entry.value.id}" 
+           value="${entry.value.count}"
+    >
+</td>
+```
+
+```javascript
+// 给输入框绑定 onchange 内容发生改变事件
+$(".updateCount").change(function () {
+    // 获取商品名称
+    var name = $(this).parent().parent().find("td:first").text();
+    var id = $(this).attr('bookId');
+    // 获取商品数量
+    var count = this.value;
+    if ( confirm("你确定要将【" + name + "】商品修改数量为：" + count + " 吗?") ) {
+        //发起请求。给服务器保存修改
+        location.href =
+            "${pageScope.basePath}cartServlet?action=updateCount&count="+count+"&id="+id;
+    } else {
+        // defaultValue属性是表单项Dom对象的属性。它表示默认的value属性值。
+        this.value = this.defaultValue;
+    }
+});
+```
+
+> defaultValue属性是表单项Dom对象的属性。它表示默认的value属性值。
+
+## 8、首页，购物车数据回显
+
+即首页显示
+
+```
+您的购物车中有3件商品
+您刚刚将时间简史加入到了购物车中
+```
+
+在添加商品到购物车的时候，保存最后一个添加的商品名称：
+
+修改addItem方法
+
+```java
+    //最后保存最后一个添加的商品名称——为了实现首页的购物车数据回显
+    req.getSession().setAttribute("lastName",cartItem.getName());
+```
+
+pages/client/index.jsp 页面中输出购物车信息：
+
+```html
+<div style="text-align: center">
+	<c:if test="${empty sessionScope.cart.items}">
+		<%--购物车为空的输出--%>
+		<span> </span>
+		<div>
+			<span style="color: red">当前购物车为空</span>
+		</div>
+	</c:if>
+	<c:if test="${not empty sessionScope.cart.items}">
+		<%--购物车非空的输出--%>
+		<span>您的购物车中有 ${sessionScope.cart.totalCount} 件商品</span>
+			<div>
+				您刚刚将
+                <span style="color: red">${sessionScope.lastName}</span>
+                加入到了购物车中
+			</div>
+	</c:if>
+</div>
+```
+
