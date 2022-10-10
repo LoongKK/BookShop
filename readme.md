@@ -2349,3 +2349,335 @@ pages/client/index.jsp 页面中输出购物车信息：
 </div>
 ```
 
+# 第七阶段：订单模块
+
+## 订单模块的模型分析:
+
+![image-20221010103942161](readme.assets/image-20221010103942161.png)
+
+由订单的界面，分析订单的模型
+Order订单
+
+| 属性       | 说明                      |
+| ---------- | ------------------------- |
+| orderld    | 订单号（唯一）            |
+| createTime | 下单时间                  |
+| price      | 金额                      |
+| status     | 0未发货，1已发货，2已签收 |
+| userld     | 用户编号                  |
+
+Orderltem订单项
+
+| 属性       | 说明     |
+| ---------- | -------- |
+| id         | 主键编号 |
+| name       | 商品名称 |
+| count      | 数量     |
+| price      | 单价     |
+| totalPrice | 总价     |
+| orderld    | 订单号   |
+
+## 订单模块的功能分析
+
+![image-20221010104210500](readme.assets/image-20221010104210500.png)
+
+## 创建订单模块的数据库表
+
+```sql
+USE book;
+CREATE TABLE t_order (
+  `order_id` VARCHAR (50) PRIMARY KEY,
+  `create_time` DATETIME,
+  `price` DECIMAL (11, 2),
+  `status` INT,
+  `user_id` INT,
+  FOREIGN KEY (`user_id`) REFERENCES t_user (`id`)
+) ;
+
+CREATE TABLE t_order_item (
+  `id` INT PRIMARY KEY AUTO_INCREMENT,
+  `name` VARCHAR (100),
+  `count` INT,
+  `price` DECIMAL (11, 2),
+  `total_price` DECIMAL (11, 2),
+  `order_id` VARCHAR (50),
+  FOREIGN KEY (`order_id`) REFERENCES t_order (`order_id`)
+) ;
+```
+
+
+
+## 创建订单模块的数据模型
+
+```java
+public class Order {
+    private String orderId;
+    private LocalDateTime createTime;
+    private BigDecimal price;
+    /**
+     *0 未发货，1 已发货，2 表示已签收
+     */
+    private Integer status = 0;
+    private Integer userId;
+    
+    //构造器、getter和setter、toString...
+}
+```
+
+
+
+```java
+public class OrderItem {
+    private Integer id;
+    private String name;
+    private Integer count;
+    private BigDecimal price;
+    private BigDecimal totalPrice;
+    private String orderId;
+    
+    //构造器、getter和setter、toString...
+}
+```
+
+## 编写订单模块的Dao程序和测试
+
+OrderDao
+
+```java
+public class OrderDaoImpl extends BaseDao<Order> implements OrderDao {
+    @Override
+    public int saveOrder(Connection conn, Order order) {
+        String sql="INSERT INTO t_order (`order_id`,`create_time`,`price`,`status`,`user_id`) "+
+                "VALUE(?,?,?,?,?)";
+        return update(conn,sql,order.getOrderId(),order.getCreateTime(),order.getPrice(),order.getStatus(),order.getUserId());
+    }
+
+    @Override
+    public List<Order> queryOrders(Connection conn) {
+        String sql="SELECT `order_id` orderId,`create_time` createTime,`price`,`status`,`user_id` userId FROM t_order";
+        return getBeanList(conn,sql);
+    }
+
+    @Override
+    public int changeOrderStatus(Connection conn, String orderId, Integer status) {
+        String sql="UPDATE t_order SET `status`=? WHERE order_id=?";
+        return update(conn,sql,status,orderId);
+    }
+
+    @Override
+    public Order queryOrderByUserId(Connection conn, Integer userId) {
+        String sql="SELECT `order_id` orderId,`create_time` createTime,`price`,`status`,`user_id` userId " +
+                "FROM t_order WHERE user_id=?";
+        return getBean(conn,sql,userId);
+    }
+}
+```
+
+```java
+public class OrderDaoTest {
+    OrderDao orderDao=new OrderDaoImpl();
+    @Test
+    public void saveOrder() {
+        Connection conn = null;
+        try {
+            conn = JDBCUtils.getConnection();
+			//这里用到了LocalDateTime
+            orderDao.saveOrder(conn,new Order("1234567548", LocalDateTime.now(),BigDecimal.valueOf(100),0,1));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Test
+    public void queryOrders() {
+        Connection conn = null;
+        try {
+            conn = JDBCUtils.getConnection();
+            List<Order> orders = orderDao.queryOrders(conn);
+            for (Order order : orders) {
+                System.out.println(order);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void changeOrderStatus() {
+        Connection conn = null;
+        try {
+            conn = JDBCUtils.getConnection();
+            orderDao.changeOrderStatus(conn,"123456758",1);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void queryOrderByUserId() {
+        Connection conn = null;
+        try {
+            conn = JDBCUtils.getConnection();
+            Order order = orderDao.queryOrderByUserId(conn, 1);
+            System.out.println(order);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+OrderItemDao
+
+```java
+public class OrderDaoImpl extends BaseDao<Order> implements OrderDao {
+    @Override
+    public int saveOrder(Connection conn, Order order) {
+        String sql="INSERT INTO t_order (`order_id`,`create_time`,`price`,`status`,`user_id`) "+
+                "VALUE(?,?,?,?,?)";
+        return update(conn,sql,order.getOrderId(),order.getCreateTime(),order.getPrice(),order.getStatus(),order.getUserId());
+    }
+
+    @Override
+    public List<Order> queryOrders(Connection conn) {
+        String sql="SELECT `order_id` orderId,`create_time` createTime,`price`,`status`,`user_id` userId FROM t_order";
+        return getBeanList(conn,sql);
+    }
+
+    @Override
+    public int changeOrderStatus(Connection conn, String orderId, Integer status) {
+        String sql="UPDATE t_order SET `status`=? WHERE order_id=?";
+        return update(conn,sql,status,orderId);
+    }
+
+    @Override
+    public Order queryOrderByUserId(Connection conn, Integer userId) {
+        String sql="SELECT `order_id` orderId,`create_time` createTime,`price`,`status`,`user_id` userId " +
+                "FROM t_order WHERE user_id=?";
+        return getBean(conn,sql,userId);
+    }
+}
+```
+
+```java
+public class OrderItemDaoTest {
+    OrderItemDao orderItemDao = new OrderItemDaoImpl();
+    @Test
+    public void saveOrderItem() {
+        try {
+            Connection conn = JDBCUtils.getConnection();
+            OrderItem orderItem = new OrderItem(null, "java编程", 2, BigDecimal.valueOf(25),
+                    BigDecimal.valueOf(50),"1234567548");
+            orderItemDao.saveOrderItem(conn,orderItem);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Test
+    public void queryOrderItemByOrderId() {
+        try {
+            Connection conn = JDBCUtils.getConnection();
+            OrderItem orderItem = orderItemDao.queryOrderItemByOrderId(conn, "1234567548");
+            System.out.println(orderItem);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
+## 编写订单模块的Service和测试
+
+时间有限，仅完成”生成订单“功能
+
+生成订单包括：(1)保存订单 (2)保存订单项 (3)更新每种书的库存和销量（4）清空购物车
+
+```java
+public class OrderServiceImpl implements OrderService {
+    OrderDao orderDao=new OrderDaoImpl();
+    OrderItemDao orderItemDao=new OrderItemDaoImpl();
+    BookDao bookDao=new BookDaoImpl();
+    @Override
+    public void createOrder(Cart cart, int userId) {
+        //生成订单包括：(1)保存订单 (2)保存订单项 (3)更新每种书的库存和销量（4）清空购物车
+        Connection conn=null;
+        try {
+            conn = JDBCUtils.getConnection();
+            //(1)保存订单
+            // 订单号===唯一性
+            String orderId = System.currentTimeMillis()+""+userId;
+            // 创建一个订单对象
+            Order order = new Order(orderId, LocalDateTime.now(),cart.getTotalPrice(), 0,userId);
+            // 保存订单
+            orderDao.saveOrder(conn,order);
+
+            //(2)保存订单项
+            // 遍历购物车中每一个商品项转换成为订单项保存到数据库
+            for (Map.Entry<Integer, CartItem>entry : cart.getItems().entrySet()){
+                // 获取每一个购物车中的商品项
+                CartItem cartItem = entry.getValue();
+                // 转换为每一个订单项
+                OrderItem orderItem = new
+                        OrderItem(null,cartItem.getName(),cartItem.getCount(),cartItem.getPrice(),cartItem.getTotalPrice(),
+                        orderId);
+                // 保存订单项到数据库
+                orderItemDao.saveOrderItem(conn,orderItem);
+
+                // (3)更新库存和销量
+                Book book = bookDao.queryBookById(conn,cartItem.getId());
+                book.setSales( book.getSales() + cartItem.getCount() );
+                book.setStock( book.getStock() - cartItem.getCount() );
+                bookDao.updateBook(conn,book);
+            }
+
+            //(4)清空购物车
+            cart.clear();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }finally{
+            JDBCUtils.closeResource(conn,null,null);
+        }
+    }
+}
+```
+
+## 编写订单模块的web层和页面联调
+
+修改 pages/cart/cart.jsp 页面，结账的请求地址：
+
+```html
+ <span class="cart_span"><a href="orderServlet?action=createOrder">去结账</a></span>
+```
+
+修改 pages/cart/checkout.jsp 页面，输出订单号：
+
+```html
+<h1>你的订单已结算，订单号为${sessionScope.orderId}</h1>
+```
+
+OrderServlet中createOrder方法
+
+```java
+public class OrderServlet extends BaseServlet{
+    OrderService orderService = new OrderServiceImpl();
+
+    protected void createOrder(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        Cart cart = (Cart) req.getSession().getAttribute("cart");
+        User loginUser = (User) req.getSession().getAttribute("user");
+        if(loginUser==null){
+            req.getRequestDispatcher("/page/user/login.jsp").forward(req,resp);
+            return;
+        }
+
+        String orderId = orderService.createOrder(cart, loginUser.getId());
+
+        req.getSession().setAttribute("orderId",orderId);
+        //防止表单重复提交，要用重定向。所以前面也要用session保存orderId，不能用req.setAttribute
+        resp.sendRedirect(req.getContextPath()+"/pages/cart/checkout.jsp");
+    }
+}
+```
