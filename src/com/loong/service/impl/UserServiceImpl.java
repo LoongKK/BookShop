@@ -22,14 +22,16 @@ public class UserServiceImpl implements UserService {
         Connection conn=null;
         try {
             conn=JDBCUtils.getConnection();
-            if(!existsUsername(user.getUsername())){
-                //用户名可用
-                if(userDao.saveUser(conn,user)==1){
-                    //成功
-                };
-            }else{
-                //用户名已存在
-            }
+//这段代码多余，在servlet中进行了判断
+//            if(!existsUsername(user.getUsername())){
+//                //用户名可用
+//                if(userDao.saveUser(conn,user)==1){
+//                    //成功
+//                };
+//            }else{
+//                //用户名已存在
+//            }
+            userDao.saveUser(conn,user);
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
