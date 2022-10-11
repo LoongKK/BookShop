@@ -11,6 +11,7 @@ import com.loong.service.OrderService;
 import com.loong.utils.JDBCUtils;
 
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -28,6 +29,9 @@ public class OrderServiceImpl implements OrderService {
         Connection conn=null;
         try {
             conn = JDBCUtils.getConnection();
+            //关闭自动提交
+            conn.setAutoCommit(false);
+
             //(1)保存订单
             // 订单号===唯一性
             String orderId = System.currentTimeMillis()+""+userId;
@@ -48,6 +52,8 @@ public class OrderServiceImpl implements OrderService {
                 // 保存订单项到数据库
                 orderItemDao.saveOrderItem(conn,orderItem);
 
+                //int c=1/0;//手动产生一个异常，以供测试事务
+
                 // (3)更新库存和销量
                 Book book = bookDao.queryBookById(conn,cartItem.getId());
                 book.setSales( book.getSales() + cartItem.getCount() );
@@ -58,11 +64,26 @@ public class OrderServiceImpl implements OrderService {
             //(4)清空购物车
             cart.clear();
 
+            //手动提交事务
+            conn.commit();
+
             return orderId;
 
         } catch (Exception e) {
             e.printStackTrace();
+            try {
+                //有异常 回滚事务
+                conn.rollback();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
         }finally{
+            try {
+                //释放连接之前恢复自动提交
+                conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
             JDBCUtils.closeResource(conn,null,null);
         }
         return null;

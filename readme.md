@@ -2744,12 +2744,80 @@ web.xml中
 
 比如 在生成订单的操作中 不仅要生成订单，还有修改库存和销量。如果中间出错(可以认为的添加一个异常 int c=1/0)则会导致数据不一致。
 
-要确保所有操作要么都成功。要么都失败，就必须要使用数据库的**事务**。
+要确保所有操作要么都成功。要么都失败，就必须要使用数据库的**事务**。  
 要确保所有操作都在一个事务内，就必须要确保：**所有操作都使用同一个Connection连接对象**。
 
-如何确保所有操作都使用同一个Connection连接对象？
-我们可以使用ThreadLocal对象来确保所有操作都使用同一个Connection对象
+如何确保所有操作都使用同一个Connection连接对象？  
+①方式一 传递Connection参数  
+②方式二 使用ThreadLocal对象来确保所有操作都使用同一个Connection对象
 ThreadLocal要确保所有操作都使用同一个Connection连接对象。（那么操作的前提条件是所有操作都必须在同一个线程中完成！！！）
+
+
+方式一 在service层里传递Connection参数给Dao层，完成事务处理(以前学过的)：  
+OrderServiceImpl.java中createOrder方法：
+
+```java
+ @Override
+    public String createOrder(Cart cart, int userId) {
+        //生成订单包括：(1)保存订单 (2)保存订单项 (3)更新每种书的库存和销量（4）清空购物车
+        Connection conn=null;
+        try {
+            conn = JDBCUtils.getConnection();
+            //关闭自动提交
+            conn.setAutoCommit(false);
+
+            //(1)保存订单
+            String orderId = System.currentTimeMillis()+""+userId;
+            Order order = new Order(orderId, LocalDateTime.now(),cart.getTotalPrice(), 0,userId);
+            orderDao.saveOrder(conn,order);//用了连接
+
+            //(2)保存订单项
+            for (Map.Entry<Integer, CartItem>entry : cart.getItems().entrySet()){
+                CartItem cartItem = entry.getValue();
+                OrderItem orderItem = new
+                        OrderItem(null,cartItem.getName(),cartItem.getCount(),cartItem.getPrice(),cartItem.getTotalPrice(),
+                        orderId);
+                orderItemDao.saveOrderItem(conn,orderItem);//用了连接
+
+                //int c=1/0;//手动产生一个异常，以供测试事务
+
+                // (3)更新库存和销量
+                Book book = bookDao.queryBookById(conn,cartItem.getId());
+                book.setSales( book.getSales() + cartItem.getCount() );
+                book.setStock( book.getStock() - cartItem.getCount() );
+                bookDao.updateBook(conn,book);//用了连接
+            }
+
+            //(4)清空购物车
+            cart.clear();
+
+            //手动提交事务
+            conn.commit();
+
+            return orderId;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                //有异常 回滚事务
+                conn.rollback();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+            }
+        }finally{
+            try {
+                //释放连接之前恢复自动提交
+                conn.setAutoCommit(true);
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            JDBCUtils.closeResource(conn,null,null);//释放连接
+        }
+        return null;
+    }
+```
+
+
 
 ### ②使用 Filter 过滤器统一给所有的 Service 方法都加上 try-catch。来进行实现的管理。
 
