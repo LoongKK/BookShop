@@ -2681,3 +2681,78 @@ public class OrderServlet extends BaseServlet{
     }
 }
 ```
+
+# 第八阶段：Filter权限检查、Filter+ThreadLocal 组合管理事务、web.xml错误页面配置
+
+## 1、使用 Filter 过滤器拦截/pages/manager/所有内容，实现权限检查
+
+ManagerFilter.java（com.loong.filter）（其中管理员和普通用户的区分以及跳转都是自己想出来的 我好nb啊啊啊啊啊）
+
+```java
+public class ManagerFilter implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException { }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        //类型转换为httpServlet （这样才有getSession方法
+        HttpServletRequest httpServletRequest = (HttpServletRequest) servletRequest;
+        //通过session获取user属性
+        User loginUser = (User) httpServletRequest.getSession().getAttribute("user");
+
+        if(loginUser==null){
+            //请求转发到登录页面
+            httpServletRequest.getRequestDispatcher("/pages/user/login.jsp").forward(servletRequest,servletResponse);
+        }else if(loginUser.getUsername().equals("admin")){
+            //管理员 （暂时先这样判断）（正常方式：可以给数据库加个字段判断是否是管理员，调用user对象看字段值是多少判断是否是管理员）
+            filterChain.doFilter(servletRequest,servletResponse);
+        }else {
+            //非管理员
+            servletResponse.setContentType("text/html;charset=utf-8");
+            servletResponse.getWriter().print("<script>alert('你不是管理员!');" +
+                    "location.href='" +httpServletRequest.getContextPath()+"/index.jsp'</script>");
+//            servletResponse.getWriter().print("<script>alert('你不是管理员!')</script> " +
+//                    "<a href="+httpServletRequest.getContextPath()+"/index.jsp>返回首页</a>");
+        }
+
+    }
+
+    @Override
+    public void destroy() { }
+    
+}
+```
+
+web.xml中
+
+```xml
+<filter>
+    <filter-name>ManagerFilter</filter-name>
+    <filter-class>com.loong.filter.ManagerFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>ManagerFilter</filter-name>
+    <url-pattern>/pages/manager/*</url-pattern>
+    <!--    为servlet也要配置拦截路径，和配置此servlet的url-pattern一样即可    -->
+    <url-pattern>/manager/bookServlet</url-pattern>
+</filter-mapping>
+```
+
+## 2、使用 Filter 和 ThreadLocal 组合管理事务
+
+### ①使用 ThreadLocal 来确保所有 dao 操作都在同一个 Connection 连接对象中完成
+
+比如 在生成订单的操作中 不仅要生成订单，还有修改库存和销量。如果中间出错(可以认为的添加一个异常 int c=1/0)则会导致数据不一致。
+
+要确保所有操作要么都成功。要么都失败，就必须要使用数据库的**事务**。
+要确保所有操作都在一个事务内，就必须要确保：**所有操作都使用同一个Connection连接对象**。
+
+如何确保所有操作都使用同一个Connection连接对象？
+我们可以使用ThreadLocal对象来确保所有操作都使用同一个Connection对象
+ThreadLocal要确保所有操作都使用同一个Connection连接对象。（那么操作的前提条件是所有操作都必须在同一个线程中完成！！！）
+
+### ②使用 Filter 过滤器统一给所有的 Service 方法都加上 try-catch。来进行实现的管理。
+
+## 3、web.xml错误页面`<error-page>`配置
+
+将所有异常都统一交给 Tomcat，让 Tomcat 展示友好的错误信息页面。

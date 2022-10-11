@@ -77,4 +77,15 @@
         <servlet-name>OrderServlet</servlet-name>
         <url-pattern>/orderServlet</url-pattern>
     </servlet-mapping>
+
+    <filter>
+        <filter-name>ManagerFilter</filter-name>
+        <filter-class>com.loong.filter.ManagerFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>ManagerFilter</filter-name>
+        <url-pattern>/pages/manager/*</url-pattern>
+        <!--    为servlet也要配置拦截路径，和配置此servlet的url-pattern一样即可    -->
+        <url-pattern>/manager/bookServlet</url-pattern>
+    </filter-mapping>
 </web-app>
