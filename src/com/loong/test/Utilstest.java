@@ -14,6 +14,6 @@ public class Utilstest {
     public void testJDBCUtils() throws Exception{
         Connection conn = JDBCUtils.getConnection();
         System.out.println(conn);
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 }

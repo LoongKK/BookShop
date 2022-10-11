@@ -2740,17 +2740,22 @@ web.xml中
 
 ## 2、使用 Filter 和 ThreadLocal 组合管理事务
 
-### ①使用 ThreadLocal 来确保所有 dao 操作都在同一个 Connection 连接对象中完成
+### （1）使用 ThreadLocal 来确保所有 dao 操作都在同一个 Connection 连接对象中完成
 
 比如 在生成订单的操作中 不仅要生成订单，还有修改库存和销量。如果中间出错(可以认为的添加一个异常 int c=1/0)则会导致数据不一致。
 
-要确保所有操作要么都成功。要么都失败，就必须要使用数据库的**事务**。  
+![image-20221011173236138](readme.assets/image-20221011173236138.png)
+
+要确保所有操作要么都成功。要么都失败，就必须要使用数据库的**事务**。 
+
+可参考：[在业务层（service）添加事务 - 爱码网 (likecs.com)](https://www.likecs.com/show-204298449.html?sc=2299.96630859375) 
 要确保所有操作都在一个事务内，就必须要确保：**所有操作都使用同一个Connection连接对象**。
 
 如何确保所有操作都使用同一个Connection连接对象？  
 ①方式一 传递Connection参数  
 ②方式二 使用ThreadLocal对象来确保所有操作都使用同一个Connection对象
 ThreadLocal要确保所有操作都使用同一个Connection连接对象。（那么操作的前提条件是所有操作都必须在同一个线程中完成！！！）
+
 
 
 方式一 在service层里传递Connection参数给Dao层，完成事务处理(以前学过的)：  
@@ -2819,8 +2824,268 @@ OrderServiceImpl.java中createOrder方法：
 
 
 
-### ②使用 Filter 过滤器统一给所有的 Service 方法都加上 try-catch。来进行实现的管理。
+方式二 使用ThreadLocal对象来确保所有操作都使用同一个Connection对象
+
+工具类V5.0 使用ThreadLocal的方式进行事务管理
+
+```java
+package com.loong.utils;
+
+import com.alibaba.druid.pool.DruidDataSourceFactory;
+import org.apache.commons.dbutils.DbUtils;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.Properties;
+/**工具类V5.0 使用ThreadLocal的方式进行事务管理
+ * 依赖Druid、DbUtils
+ */
+public class JDBCUtils {
+    private static DataSource source;
+
+    static {
+        try {
+            Properties pros=new Properties();
+            pros.load(JDBCUtils.class.getClassLoader().getResourceAsStream("jdbc.properties"));
+            source = DruidDataSourceFactory.createDataSource(pros);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+//---------------------------使用ThreadLocal--------------------------------
+    private static ThreadLocal<Connection> tl = new ThreadLocal<Connection>();
+    /**
+     * 使用ThreadLocal 的 getConnection方法
+     * 返回一个连接。返回null则获取连接失败
+     */
+    public static Connection getConnection() {
+        Connection conn = tl.get();
+        if (conn == null) {
+            try {
+                conn = source.getConnection();
+                tl.set(conn); // 保存到 ThreadLocal 对象中，供后面的 jdbc 操作使用
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        return conn;
+    }
+
+    /**
+     *开始事务
+     */
+    public static void beginTransaction(){
+        Connection conn=getConnection();//这里不用tl.get()好处是 可以判断null 并获取连接，可以在Filter前使用
+        if (conn != null) {
+            try {
+                conn.setAutoCommit(false);//禁用自动提交
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    /**
+     * 提交事务
+     */
+    public static void commit(){
+        Connection conn = tl.get();
+        if (conn != null) {
+            try {
+                conn.commit();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    /**
+     *  回滚事务
+     */
+    public static void rollback(){
+        Connection conn = tl.get();
+        if (conn != null) {
+            try {
+                conn.rollback();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+    /**
+     *关闭连接
+     */
+    public static void closeConnection(){
+        Connection conn=tl.get();
+        if (conn != null) {
+            try {
+                conn.setAutoCommit(false);//关闭前恢复自动提交
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            //DbUtils.closeQuietly(conn); //DbUtils工具类中的关闭方法可以 非null判断、异常处理
+            try {
+                conn.close();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+        }
+        // 一定要执行 remove 操作，否则就会出错。（因为 Tomcat 服务器底层使用了线程池技术）
+        tl.remove();
+    }
+
+}
+```
+
+再把` JDBCUtils.closeResource(conn,null,null);`换成 `JDBCUtils.closeConnection();`  
+
+此时OrderService中createOrder方法 仍然可以实现事务管理。  
+
+但是如果很多方法，都要进行 禁用自动提交、提交、回滚、恢复自动提交(把它写在了工具类closeConnection方法里)、关闭连接等操作。因此可以使用Filter来处理
+
+### (2)使用 Filter 过滤器统一给所有的 Service 方法都加上 try-catch。来进行事务的管理。
+
+![image-20221011180629588](readme.assets/image-20221011180629588.png)
+
+访问Servlet的请求被Filter拦截，Filter间接调用了Servlet程序中的业务方法
+先filterChain.doFilter()方法 调用Servlet中的方法,  
+而Servlet中的方法又调用业务方法(Service中的方法),  
+在Service的方法中仅需 获取连接、处理业务代码  
+
+比如：
+
+```
+①执行Filter前置代码：开启事务(获取连接、禁用自动提交) —
+②—>执行filterChain.doFilter()—调用—>OrderServlet.createOrder()—调用—>OrderService(){ 获取连接conn；调用Dao中方法使用conn处理业务}—
+③——>执行Filter后置代码： 提交事务 finally关闭连接(包括了恢复自动提交);
+如果有异常，则执行catch中的回滚事务，再finally中关闭连接(包括了恢复自动提交)
+```
+
+①TransactionFilter.java(com.loong.filter)
+
+```java
+public class TransactionFilter implements Filter {
+    @Override
+    public void init(FilterConfig filterConfig) throws ServletException { }
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        try {
+            JDBCUtils.beginTransaction();
+            filterChain.doFilter(servletRequest, servletResponse);
+            JDBCUtils.commit();
+        } catch (Exception e) {
+            e.printStackTrace();
+            JDBCUtils.rollback();
+        } finally {
+            JDBCUtils.closeConnection();
+        }
+    }
+
+    @Override
+    public void destroy() { }
+}
+```
+
+web.xml配置拦截路径
+
+```xml
+<filter>
+    <filter-name>TransactionFilter</filter-name>
+    <filter-class>com.loong.filter.TransactionFilter</filter-class>
+</filter>
+<filter-mapping>
+    <filter-name>TransactionFilter</filter-name>
+    <!-- /* 表示当前工程下所有请求 -->
+    <url-pattern>/*</url-pattern>
+</filter-mapping>
+```
+
+②修改各Service实现类中的方法，只获取连接和处理业务。不需要开启关闭事务、提交、回滚、关闭连接，也不需要捕获连接相关异常。
+
+如：
+
+```java
+@Override
+    public String createOrder(Cart cart, int userId) {
+        Connection conn = JDBCUtils.getConnection();
+        处理业务代码;
+    }
+```
+
+③要把 BaseServlet 中的异常往外抛给 Filter 过滤器。以便于Filter捕获到异常，触发事务回滚。里面可以捕获，但要外抛给Filter，catch中throw：
+```
+...
+} catch (Exception e) {
+    e.printStackTrace();
+    throw new RuntimeException(e);// 把异常抛给 Filter 过滤器
+}
+...
+```
+
+测试 在工具类的回滚方法中`System.out.println("回滚");`,在OrderServiceImpl的createOrder方法中`int c=1/0;`手动产生一个异常，以供测试事务。
 
 ## 3、web.xml错误页面`<error-page>`配置
 
-将所有异常都统一交给 Tomcat，让 Tomcat 展示友好的错误信息页面。
+将所有异常都统一交给 Tomcat，让 Tomcat 展示友好的错误信息页面。  
+
+在 web.xml 中我们可以通过错误页面配置来进行管理
+
+```xml
+  <!--error-page 标签配置，服务器出错之后，自动跳转的页面-->
+    <error-page>
+        <!--error-code 是错误类型-->
+        <error-code>500</error-code>
+        <!--location 标签表示。要跳转去的页面路径-->
+        <location>/pages/error/error500.jsp</location>
+    </error-page>
+    <!--error-page 标签配置，服务器出错之后，自动跳转的页面-->
+    <error-page>
+        <!--error-code 是错误类型-->
+        <error-code>404</error-code>
+        <!--location 标签表示。要跳转去的页面路径-->
+        <location>/pages/error/error404.jsp</location>
+    </error-page>
+```
+
+Filter捕获到异常抛给Tomcat。TransactionFilter.java
+
+```java
+...
+} catch (Exception e) {
+            e.printStackTrace();
+            JDBCUtils.rollback();
+            throw new RuntimeException(e);//抛给Tomcat，让 Tomcat 展示友好的错误信息页面
+        } finally {
+    ...
+```
+
+/pages/error/error500.jsp:
+
+```jsp
+<%@ page contentType="text/html;charset=UTF-8" language="java" %>
+<html>
+<head>
+    <title>Title</title>
+    <jsp:include page="../common/head.jsp"></jsp:include>
+</head>
+<body>
+抱歉，您访问的后台程序出现错误，程序员正在抢修。。。<br>
+<a href="${basePath}index.jsp">返回首页</a>
+</body>
+</html>
+```
+
+/pages/error/error404.jsp
+
+```jsp
+<body>
+抱歉，您访问的页面不存在，或已被删除<br>
+<a href="${basePath}index.jsp">返回首页</a>
+</body>
+```
+
+测试 error500：`int c=1/0;`手动产生一个异常
+
+测试 error404：访问一个不存在的页面

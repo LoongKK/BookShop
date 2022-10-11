@@ -88,4 +88,29 @@
         <!--    为servlet也要配置拦截路径，和配置此servlet的url-pattern一样即可    -->
         <url-pattern>/manager/bookServlet</url-pattern>
     </filter-mapping>
+
+    <filter>
+        <filter-name>TransactionFilter</filter-name>
+        <filter-class>com.loong.filter.TransactionFilter</filter-class>
+    </filter>
+    <filter-mapping>
+        <filter-name>TransactionFilter</filter-name>
+        <!-- /* 表示当前工程下所有请求 -->
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+    <!--error-page 标签配置，服务器出错之后，自动跳转的页面-->
+    <error-page>
+        <!--error-code 是错误类型-->
+        <error-code>500</error-code>
+        <!--location 标签表示。要跳转去的页面路径-->
+        <location>/pages/error/error500.jsp</location>
+    </error-page>
+    <!--error-page 标签配置，服务器出错之后，自动跳转的页面-->
+    <error-page>
+        <!--error-code 是错误类型-->
+        <error-code>404</error-code>
+        <!--location 标签表示。要跳转去的页面路径-->
+        <location>/pages/error/error404.jsp</location>
+    </error-page>
 </web-app>

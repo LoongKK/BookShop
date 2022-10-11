@@ -36,6 +36,8 @@ public abstract class BaseServlet extends HttpServlet{
             method.invoke(this, request, response);
         } catch (Exception e) {
             e.printStackTrace();
+            //要把 BaseServlet 中的异常往外抛给 Filter 过滤器。以便于Filter捕获到异常，触发事务回滚
+            throw new RuntimeException(e);// 把异常抛给 Filter 过滤器
         }
 
             /*未使用反射优化

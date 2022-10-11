@@ -23,7 +23,7 @@ public class UserDaoTest {
         }else{
             System.out.println("用户名已存在");
         }
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 
     @Test
@@ -35,7 +35,7 @@ public class UserDaoTest {
         }else{
             System.out.println("登录成功！");
         }
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
     @Test
     public void saveUser()throws Exception{
@@ -50,6 +50,6 @@ public class UserDaoTest {
             userDao.saveUser(conn, user);
         }
 
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 }

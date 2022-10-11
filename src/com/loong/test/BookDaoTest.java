@@ -28,7 +28,7 @@ public class BookDaoTest {
         int count = bookDao.addBook(conn, book);
         System.out.println(count);
 
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 
     @Test
@@ -38,7 +38,7 @@ public class BookDaoTest {
 
         System.out.println(bookDao.deleteBookById(conn, 21));
 
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 
     @Test
@@ -57,7 +57,7 @@ public class BookDaoTest {
         book = bookDao.queryBookById(conn,id);
         System.out.println(book);
 
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 
     @Test
@@ -68,7 +68,7 @@ public class BookDaoTest {
         Book book = bookDao.queryBookById(conn, 2);
         System.out.println(book);
 
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
     }
 
     @Test
@@ -81,7 +81,7 @@ public class BookDaoTest {
             System.out.println(book);
         }
 
-        JDBCUtils.closeResource(conn,null,null);
+        JDBCUtils.closeConnection();
 
     }
 }
