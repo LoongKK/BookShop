@@ -49,7 +49,7 @@ public class OrderServiceImpl implements OrderService {
             // 保存订单项到数据库
             orderItemDao.saveOrderItem(conn, orderItem);
 
-            int c=1/0;//手动产生一个异常，以供测试事务
+            //int c=1/0;//手动产生一个异常，以供测试事务
 
             // (3)更新库存和销量
             Book book = bookDao.queryBookById(conn, cartItem.getId());
