@@ -3089,3 +3089,160 @@ Filter捕获到异常抛给Tomcat。TransactionFilter.java
 测试 error500：`int c=1/0;`手动产生一个异常
 
 测试 error404：访问一个不存在的页面
+
+# 第九阶段：使用Ajax技术实现异步请求、局部更新
+
+使用 AJAX 验证用户名是否可用
+
+使用 AJAX 修改把商品添加到购物车
+
+## 使用 AJAX 验证用户名是否可用
+
+![image-20221013101835070](readme.assets/image-20221013101835070.png)
+
+修改regist.jsp使用 AJAX 请求
+
+```javascript
+//使用 AJAX 验证用户名是否可用
+$("#username").blur(function (){//blur是 元素失去焦点事件
+   //获取用户名
+   let username = this.value;
+   //发送Ajax请求
+   $.getJSON("${basePath}userServlet","action=ajaxExistsUsername&username="+username,
+         function (date){
+      //console.log(date);//在控制台看到isExistsUsername:false或true
+            if(date.isExistsUsername){
+               $("span.errorMsg").text("用户名已存在！");
+            }else{
+               //这里空格也会显示用户名可用。因此还要验证用户名格式对不对
+               let usernamePatt=/^\w{5,12}$/;
+               if (!usernamePatt.test(username)){
+                  $("span.errorMsg").text("用户名必须由字母，数字下划线组成，并且长度为5到12位");
+               }else{
+                  $("span.errorMsg").text("用户名可用")
+               }
+            }
+         });
+});
+```
+
+UserServlet.java修改 增加方法ajaxExistsUsername
+
+```java
+/**
+ * 使用 AJAX 验证用户名是否可用 （有了这个，regist方法也可以省略了这个逻辑）
+ */
+protected void ajaxExistsUsername(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    //获取请求的参数
+    String username = req.getParameter("username");
+    //调用userService.existsUsername()
+    Boolean isExistsUsername = userService.existsUsername(username);
+    //把返回的结果封装为Map对象
+    Map<String,Object> resultMap = new HashMap<>();
+    resultMap.put("isExistsUsername",isExistsUsername);
+    //转换成JSON(需要导入Gson的jar包)
+    Gson gson = new Gson();
+    String resultMapJSON = gson.toJson(resultMap);
+    //字符输出流输出
+    resp.getWriter().write(resultMapJSON);
+}
+```
+
+## 使用 AJAX 修改把商品添加到购物车
+
+![image-20221013140221148](readme.assets/image-20221013140221148.png)
+
+
+
+client/index.jsp修改  
+使用Ajax请求
+
+```html
+<%--为"加入购物车"按钮添加绑定单机事件--%>
+<script type="text/javascript">
+   $(function(){
+      $("button.addToCart").click(function (){
+         // javaScript 语言中提供了一个 location 地址栏对象，可以获取浏览器地址栏中的地址
+         //location.href="${pageScope.basePath}cartServlet?action=addItem&id="+$(this).attr("bookId");//未使用ajax时
+          
+         //使用Ajax请求
+         $.getJSON("${pageScope.basePath}cartServlet","action=ajaxAddItem&id="+$(this).attr("bookId"),
+               function(data){
+                  //console.log(data);
+                  $("#cartTotalCount").text("您的购物车中有 "+data.totalCount+" 件商品");
+                  $("#cartLastName").html("您刚刚将<span style='color: red'>"+data.lastName+"</span>加入到了购物车中");
+               });
+      });
+   });
+</script>
+```
+为显示购物车商品数量的span和最后一次添加商品名的div标签 添加id属性：
+> 这里为什么购物车为空和非空两种情况都要加id？  
+>  因为如果页面加载，才会执行判断。由此输出html页面内容。  
+>  如果是点击"加入购物车"，使用Ajax请求 采用的是局部更新，如果仅对一种情况加id属性，那局部更新时找对应id的标签可能找不到。
+>  
+> 比如页面第一次加载(执行了判断) ，当前购物车为空， 此时若”加入购物车“局部更新是更新的这个情况下的id  
+> 如果再刷新页面 (执行了判断，)“您的购物车中有 xxx件商品”，此时若”加入购物车“局部更新是更新的不为情况下的id  
+> （lastName同理）  
+> （因为页面有 第一次加载 和 刷新 的情况，所以Servlet里也仍然要将lastName保存到session中）  
+
+```html
+    <div style="text-align: center">
+		<c:if test="${empty sessionScope.cart.items}">
+			<%--购物车为空的输出--%>
+			<span id="cartTotalCount"> </span>
+			<div id="cartLastName">
+				<span style="color: red">当前购物车为空</span>
+			</div>
+		</c:if>
+		<c:if test="${not empty sessionScope.cart.items}">
+			<%--购物车非空的输出--%>
+			<span id="cartTotalCount">您的购物车中有 ${sessionScope.cart.totalCount} 件商品</span>
+			<div id="cartLastName">
+				您刚刚将<span style="color: red">${sessionScope.lastName}</span>加入到了购物车中
+			</div>
+		</c:if>
+	</div>
+```
+
+CartServlet.java
+
+```java
+/**
+ * 加入购物车（使用Ajax技术）
+ * @param req
+ * @param resp
+ * @throws ServletException
+ * @throws IOException
+ */
+protected void ajaxAddItem(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    // 获取请求的参数 商品编号
+    int id = WebUtils.parseInt(req.getParameter("id"), 0);
+    // 调用 bookService.queryBookById(id):Book 得到图书的信息
+    Book book = bookService.queryBookById(id);
+    // 把图书信息，转换成为 CartItem 商品项
+    CartItem cartItem = new CartItem(book.getId(),book.getName(),1,book.getPrice(),book.getPrice());
+    //取Session中的购物车对象Cart（如果第一次向购物车添加商品项 需要新建Cart对象）
+    Cart cart = (Cart) req.getSession().getAttribute("cart");
+    if (cart == null) {
+        cart = new Cart();
+        req.getSession().setAttribute("cart",cart);
+    }
+    // 调用 cart.addItem(CartItem);添加商品项
+    cart.addItem(cartItem);
+
+   //返回购物车总的商品数量和最后一个添加的商品名称——为了实现首页的购物车数据回显
+    //这里比不使用Ajax多返回了总商品数量，是供局部更新使用。页面加载(“全面更新”)会在通过${sessionScope.cart.totalCount}即获取
+    //（因为页面有 第一次加载 和 刷新 的情况，所以Servlet里也仍然要将lastName保存到session中）
+    req.getSession().setAttribute("lastName",cartItem.getName());
+
+    Map<String,Object> resultMap=new HashMap<>();
+    resultMap.put("totalCount",cart.getTotalCount());
+    resultMap.put("lastName",cartItem.getName());
+
+    Gson gson = new Gson();
+    String resultMapJSON = gson.toJson(resultMap);
+    resp.getWriter().write(resultMapJSON);
+    // 不需要重定向到本页面了（因为是局部更新）
+}
+```

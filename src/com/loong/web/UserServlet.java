@@ -3,6 +3,7 @@ package com.loong.web; /**
  * @create 2022/10/2-21:54
  */
 
+import com.google.gson.Gson;
 import com.loong.pojo.User;
 import com.loong.service.UserService;
 import com.loong.service.impl.UserServiceImpl;
@@ -12,12 +13,34 @@ import javax.servlet.*;
 import javax.servlet.http.*;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.util.HashMap;
+import java.util.Map;
 
 import static com.google.code.kaptcha.Constants.KAPTCHA_SESSION_KEY;
 
 
 public class UserServlet extends BaseServlet {
     //doPost抽取到BaseServlet中了，只需继承BaseServlet即可(也就继承了其中的doPost方法)
+    UserService userService = new UserServiceImpl();
+
+    /**
+     * 使用 AJAX 验证用户名是否可用 （有了这个，regist方法也可以省略了这个逻辑）
+     */
+    protected void ajaxExistsUsername(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        //获取请求的参数
+        String username = req.getParameter("username");
+        //调用userService.existsUsername()
+        Boolean isExistsUsername = userService.existsUsername(username);
+        //把返回的结果封装为Map对象
+        Map<String,Object> resultMap = new HashMap<>();
+        resultMap.put("isExistsUsername",isExistsUsername);
+        //转换成JSON(需要导入Gson的jar包)
+        Gson gson = new Gson();
+        String resultMapJSON = gson.toJson(resultMap);
+        //字符输出流输出
+        resp.getWriter().write(resultMapJSON);
+
+    }
 
     protected void login(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         //原来LoginServlet中的代码
@@ -76,7 +99,6 @@ public class UserServlet extends BaseServlet {
         req.getSession().removeAttribute(KAPTCHA_SESSION_KEY);
         //验证码是否正确。（目前没学如何生成验证码，是写死的"abcde"）
         if (token != null && token.equalsIgnoreCase(req.getParameter("code"))) {
-            UserService userService = new UserServiceImpl();
             //用户名是否可用
             if (!userService.existsUsername(user.getUsername())) {
                 //保存到数据库

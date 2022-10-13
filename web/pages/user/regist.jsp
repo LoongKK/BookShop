@@ -11,6 +11,28 @@
 		//页面加载完成之后
 		$(function(){
 
+			//使用 AJAX 验证用户名是否可用
+			$("#username").blur(function (){//blur是 元素失去焦点事件
+				//获取用户名
+				let username = this.value;
+				//发送Ajax请求
+				$.getJSON("${basePath}userServlet","action=ajaxExistsUsername&username="+username,
+						function (date){
+					//console.log(date);//在控制台看到isExistsUsername:false或true
+							if(date.isExistsUsername){
+								$("span.errorMsg").text("用户名已存在！");
+							}else{
+								//这里空格也会显示用户名可用。因此还要验证用户名格式对不对
+								let usernamePatt=/^\w{5,12}$/;
+								if (!usernamePatt.test(username)){
+									$("span.errorMsg").text("用户名必须由字母，数字下划线组成，并且长度为5到12位");
+								}else{
+									$("span.errorMsg").text("用户名可用")
+								}
+							}
+						});
+			});
+
 			//”注册“（提交commit）绑定单击事件。（也可以对每个输入框用失去焦点事件  $("iniput[name='username']").bind('mouseover',function(){})）
 			$("#sub_btn").click(function (){
 				// 验证用户名：必须由字母，数字下划线组成，并且长度为 5 到 12 位
